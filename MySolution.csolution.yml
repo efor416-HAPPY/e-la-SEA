@@ -8,7 +8,7 @@ solution:
 
   target-types:
     - type: MyBoard
-      device: Cortex-M4
+      device: ARMCM4
 
   build-types:
     - type: Debug
