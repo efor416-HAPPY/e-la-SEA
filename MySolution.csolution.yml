@@ -1,7 +1,7 @@
 solution:
   compiler: AC6
   packs:
-    - pack: ARM::CMSIS@6.3.0
+    - pack: ARM::CMSIS@5.9.0
     - pack: ARM::CMSIS-Compiler@2.2.0
     - pack: ARM::CMSIS-View@1.2.0
     - pack: Keil::MDK-Middleware@8.0.0
