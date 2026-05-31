@@ -23,6 +23,7 @@ downloads/
 out/
 tmp/
 IntelliSense/
+**/RTE/_*/
 
 # Temporary office files
 ~$*
