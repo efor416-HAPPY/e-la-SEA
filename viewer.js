@@ -69,7 +69,9 @@ const BadaAudioManager = {
     startSound(type) {
         this.states[type] = true;
         const btn = document.getElementById('soundBtn' + type.charAt(0).toUpperCase() + type.slice(1));
-        btn?.classList?.add('active');
+        if (btn) {
+            btn.classList.add('active');
+        }
 
         if (type === 'rain') this.playRain();
         if (type === 'waves') this.playWaves();
@@ -80,7 +82,9 @@ const BadaAudioManager = {
     stopSound(type) {
         this.states[type] = false;
         const btn = document.getElementById('soundBtn' + type.charAt(0).toUpperCase() + type.slice(1));
-        btn?.classList?.remove('active');
+        if (btn) {
+            btn.classList.remove('active');
+        }
 
         if (this.sources[type]) {
             try {
@@ -91,10 +95,11 @@ const BadaAudioManager = {
                 }
             } catch (e) {
                 console.warn("Failed to stop audio buffer source:", e);
+            } finally {
+                this.sources[type] = null;
+                this.gains[type] = null;
             }
-            this.sources[type] = null;
         }
-        this.gains[type] = null;
     },
 
     createNoiseBuffer(type = 'white') {
@@ -662,7 +667,11 @@ function renderBehanceGrid(files) {
             });
             localStorage.setItem(pathKey, socialData);
         }
-        const data = JSON.parse(socialData);
+        const data = safeJsonParse(socialData, {
+            appreciations: 0,
+            views: 0,
+            comments: []
+        });
         
         const isSavedKey = 'pin_saved_' + file.path;
         const isSaved = localStorage.getItem(isSavedKey) === 'true';
@@ -1625,11 +1634,11 @@ window.addEventListener('mousemove', (e) => {
     
     // Live update coordinates HUD
     if (viewerState.activeFile && viewerState.activeFile.ext === 'dxf') {
-        const rect = dxfCanvas ? dxfCanvas.getBoundingClientRect() : null;
+        const rect = dxfCanvas?.getBoundingClientRect() || null;
         if (rect) {
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
-            if (mouseX >= 0 && mouseX <= dxfCanvas.width && mouseY >= 0 && mouseY <= dxfCanvas.height) {
+            if (mouseX >= 0 && mouseX <= (dxfCanvas?.width || 0) && mouseY >= 0 && mouseY <= (dxfCanvas?.height || 0)) {
                 const cadPt = toCAD(mouseX, mouseY);
                 const hudCoordsEl = document.getElementById('hudCoords');
                 if (hudCoordsEl) hudCoordsEl.innerText = `X: ${cadPt.x.toFixed(2)}, Y: ${cadPt.y.toFixed(2)}`;
@@ -1647,7 +1656,7 @@ dxfCanvas?.addEventListener('wheel', (e) => {
     e.preventDefault();
     
     // Center of zoom: mouse pointer position
-    const rect = dxfCanvas ? dxfCanvas.getBoundingClientRect() : null;
+    const rect = dxfCanvas?.getBoundingClientRect() || null;
     if (!rect) return;
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;

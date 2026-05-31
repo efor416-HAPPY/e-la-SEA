@@ -13,6 +13,14 @@ let currentPath = '';
 let cameraStream = null;
 let isCameraOn = false;
 
+function safeJsonParse(str, defaultVal = null) {
+    try {
+        return str ? JSON.parse(str) : defaultVal;
+    } catch (e) {
+        return defaultVal;
+    }
+}
+
 // DOM Elements
 const webcamFeed = document.getElementById('webcam-feed');
 const audioWaveform = document.getElementById('audio-waveform');
@@ -160,6 +168,21 @@ async function initAudioAnalyzer() {
         console.warn("Microphone access denied or unavailable:", err);
         audioDbLabel.textContent = "오디오 입력 차단";
         drawStaticWave();
+    } finally {
+        if (!audioAnalyser) {
+            if (micStream) {
+                try {
+                    micStream.getTracks().forEach(track => track.stop());
+                } catch (e) {}
+                micStream = null;
+            }
+            if (audioContext) {
+                try {
+                    audioContext.close();
+                } catch (e) {}
+                audioContext = null;
+            }
+        }
     }
 }
 
@@ -432,9 +455,10 @@ async function updateSystemStats() {
 
 async function loadDirectoryList(path) {
     fileList.innerHTML = `<li class="file-item loading">디렉토리 로드 중...</li>`;
+    let res = null;
     try {
         const encodedPath = encodeURIComponent(path);
-        const res = await fetch(`${API_BASE}/api/files?action=list&path=${encodedPath}`);
+        res = await fetch(`${API_BASE}/api/files?action=list&path=${encodedPath}`);
         if (!res.ok) throw new Error("Directory list error");
         
         const data = await res.json();
@@ -494,13 +518,18 @@ async function loadDirectoryList(path) {
     } catch (err) {
         fileList.innerHTML = `<li class="file-item loading" style="color: #C2635B;">파일을 불러오지 못했습니다.</li>`;
         console.error(err);
+    } finally {
+        if (res && res.body && !res.bodyUsed) {
+            res.body.cancel().catch(() => {});
+        }
     }
 }
 
 async function loadFileContent(filePath) {
+    let res = null;
     try {
         const encodedPath = encodeURIComponent(filePath);
-        const res = await fetch(`${API_BASE}/api/files?action=read&path=${encodedPath}`);
+        res = await fetch(`${API_BASE}/api/files?action=read&path=${encodedPath}`);
         if (!res.ok) throw new Error("File read error");
         
         const data = await res.json();
@@ -517,6 +546,10 @@ async function loadFileContent(filePath) {
     } catch (err) {
         console.error("Failed to read file:", err);
         alert(`파일을 읽어오는데 실패했습니다: ${err.message}`);
+    } finally {
+        if (res && res.body && !res.bodyUsed) {
+            res.body.cancel().catch(() => {});
+        }
     }
 }
 
@@ -526,9 +559,10 @@ async function triggerWebSearch() {
     
     webSearchResults.innerHTML = `<div class="search-placeholder-text">온라인 정보 검색 스트림 연결 중...</div>`;
     
+    let res = null;
     try {
         const encodedQ = encodeURIComponent(query);
-        const res = await fetch(`${API_BASE}/api/search?q=${encodedQ}`);
+        res = await fetch(`${API_BASE}/api/search?q=${encodedQ}`);
         if (!res.ok) throw new Error("Search server error");
         
         const data = await res.json();
@@ -573,6 +607,10 @@ async function triggerWebSearch() {
     } catch (err) {
         webSearchResults.innerHTML = `<div class="search-placeholder-text" style="color: #C2635B;">검색 도중 에러가 발생했습니다: ${err.message}</div>`;
         console.error(err);
+    } finally {
+        if (res && res.body && !res.bodyUsed) {
+            res.body.cancel().catch(() => {});
+        }
     }
 }
 
@@ -721,24 +759,27 @@ function setupEventListeners() {
 
     // Persona buttons click handler
     document.querySelectorAll('.btn-persona')?.forEach(btn => {
-        btn?.addEventListener('click', (e) => {
-            document.querySelectorAll('.btn-persona')?.forEach(b => b?.classList?.remove('active'));
-            const targetBtn = e.currentTarget;
-            targetBtn?.classList?.add('active');
-            
-            const personaName = targetBtn.getAttribute('data-persona');
-            
-            if (window.araBrain) {
-                window.araBrain.setPersona(personaName);
-                const currentMood = window.araBrain.moodState;
-                updateMoodChip(currentMood, getMoodKorean(currentMood));
-                
-                // Greet user with new persona voice
-                const greeting = window.araBrain.getGreeting();
-                appendMessage('ai', greeting);
-                speakText(greeting);
-            }
-        });
+        if (btn) {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.btn-persona')?.forEach(b => b?.classList?.remove('active'));
+                const targetBtn = e.currentTarget;
+                if (targetBtn) {
+                    targetBtn.classList.add('active');
+                    const personaName = targetBtn.getAttribute('data-persona');
+                    
+                    if (window.araBrain) {
+                        window.araBrain.setPersona(personaName);
+                        const currentMood = window.araBrain.moodState;
+                        updateMoodChip(currentMood, getMoodKorean(currentMood));
+                        
+                        // Greet user with new persona voice
+                        const greeting = window.araBrain.getGreeting();
+                        appendMessage('ai', greeting);
+                        speakText(greeting);
+                    }
+                }
+            });
+        }
     });
 
     // Trigger Brain Stimulation button
@@ -774,10 +815,12 @@ function setupEventListeners() {
 
     // Tool launcher buttons
     document.querySelectorAll('.btn-tool')?.forEach(btn => {
-        btn?.addEventListener('click', () => {
-            const target = btn.getAttribute('data-target');
-            runLocalUtility(target);
-        });
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const target = btn.getAttribute('data-target');
+                runLocalUtility(target);
+            });
+        }
     });
 
     // Naver Login Button
@@ -1011,9 +1054,10 @@ function handleUserAuthentication() {
         // Check saved session
         const savedUser = localStorage.getItem('ara_user');
         if (savedUser) {
-            try {
-                displayUserProfile(JSON.parse(savedUser));
-            } catch (e) {
+            const parsed = safeJsonParse(savedUser, null);
+            if (parsed) {
+                displayUserProfile(parsed);
+            } else {
                 localStorage.removeItem('ara_user');
             }
         } else {
