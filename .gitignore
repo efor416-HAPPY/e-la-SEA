@@ -8,12 +8,21 @@ __pycache__/
 .claude/
 .vibecheck/
 .claude-strategies.json
+.vscode/
 
 # Local downloads and reports
 downloads/
 *.zip
 *.xlsx
 *.png
+
+# CMSIS-Toolbox temporary and build output files
+*.cbuild-idx.yml
+*.cbuild-pack.yml
+*.cbuild-set.yml
+out/
+tmp/
+IntelliSense/
 
 # Temporary office files
 ~$*

@@ -1,0 +1,14 @@
+project:
+  description: ARA MDK-Middleware Solution Project
+  packs:
+    - pack: ARM::CMSIS
+    - pack: Keil::MDK-Middleware
+  components:
+    - component: CMSIS:CORE
+  groups:
+    - group: Source
+      files:
+        - file: ./main.c
+  output:
+    type:
+      - elf
