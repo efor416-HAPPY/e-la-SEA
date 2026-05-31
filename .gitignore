@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and IDEs
+.cursor/
+.claude/
+.vibecheck/
+.claude-strategies.json
+
+# Local downloads and reports
+downloads/
+*.zip
+*.xlsx
+*.png
+
+# Temporary office files
+~$*

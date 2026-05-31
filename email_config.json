@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "sender_email": "efor6@naver.com",
+  "sender_password": "YOUR_NAVER_SMTP_PASSWORD_OR_APP_PASSWORD",
+  "recipient_email": "efor6@naver.com",
+  "smtp_server": "smtp.naver.com",
+  "smtp_port": 465,
+  "naver_client_id": "",
+  "naver_client_secret": "",
+  "naver_searchadvisor_token": "",
+  "naver_searchadvisor_site_url": ""
+}
