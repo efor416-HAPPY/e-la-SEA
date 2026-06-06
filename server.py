@@ -23,6 +23,63 @@ if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
 
 # ==========================================================================
+# Self-Protection Firewall Subsystem (IP Filtering, DDoS Limiters)
+# ==========================================================================
+class RateLimiter:
+    def __init__(self, limit=20, window=1.0):
+        self.limit = limit
+        self.window = window
+        self.history = {} # ip -> list of timestamps
+        self.lock = threading.Lock()
+
+    def is_allowed(self, ip):
+        with self.lock:
+            now = time.time()
+            if ip not in self.history:
+                self.history[ip] = []
+            
+            # Filter out timestamps older than the window
+            self.history[ip] = [t for t in self.history[ip] if now - t < self.window]
+            
+            if len(self.history[ip]) < self.limit:
+                self.history[ip].append(now)
+                return True
+            else:
+                return False
+
+rate_limiter = RateLimiter(limit=20, window=1.0)
+
+def check_ip_whitelist(ip):
+    # Allow localhost loopback
+    if ip in ('127.0.0.1', '::1', 'localhost'):
+        return True
+    if ip.startswith('127.'):
+        return True
+    # Allow private network addresses
+    if ip.startswith('10.'):
+        return True
+    if ip.startswith('192.168.'):
+        return True
+    if ip.startswith('172.'):
+        parts = ip.split('.')
+        if len(parts) >= 2:
+            try:
+                second_octet = int(parts[1])
+                if 16 <= second_octet <= 31:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+def validate_path_safety(path_to_check, base_dir=WORKSPACE_DIR):
+    try:
+        abs_target = os.path.abspath(path_to_check)
+        abs_base = os.path.abspath(base_dir)
+        return os.path.commonpath([abs_base, abs_target]) == abs_base
+    except Exception:
+        return False
+
+# ==========================================================================
 # Data Scrapers: NASA, Open Culture, Pinterest RSS
 # ==========================================================================
 def fetch_nasa_apod():
@@ -115,12 +172,89 @@ def fetch_rss_feed(url, max_items=3):
     return items
 
 # ==========================================================================
-# AI Commentary & Blog Draft Generator
+# AI Commentary & Blog Draft Generator & Ollama Helpers
 # ==========================================================================
+def get_ollama_config():
+    config = get_email_config()
+    return {
+        "enabled": config.get("ollama_enabled", False),
+        "url": config.get("ollama_url", "http://localhost:11434"),
+        "model": config.get("ollama_model", "gemma2:2b")
+    }
+
+def check_ollama_status(url):
+    try:
+        # Check /api/tags
+        req = urllib.request.Request(f"{url}/api/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                models = [m.get("name") for m in data.get("models", [])]
+                return {"online": True, "models": models}
+    except Exception as e:
+        print("Ollama connection failed:", e)
+    return {"online": False, "models": []}
+
+def query_ollama_chat(messages, model="gemma2:2b", url="http://localhost:11434"):
+    try:
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False
+        }
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            f"{url}/api/chat",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=15) as response:
+            if response.status == 200:
+                res_data = json.loads(response.read().decode('utf-8'))
+                return res_data.get("message", {}).get("content", "")
+    except Exception as e:
+        print("Ollama query failed:", e)
+        raise e
+    return ""
+
 def generate_ai_commentary(nasa_title, culture_items, pinterest_items):
-    # Organic commentary style matching the Nature visual theme of ARA
+    # Try querying local Ollama LLM if enabled and online
+    ollama_cfg = get_ollama_config()
+    if ollama_cfg["enabled"]:
+        status = check_ollama_status(ollama_cfg["url"])
+        if status["online"]:
+            try:
+                culture_txt = "\n".join([f"- {item['title']}: {item['description']}" for item in culture_items])
+                pinterest_txt = "\n".join([f"- {item['title']}: {item['description']}" for item in pinterest_items])
+                
+                system_prompt = (
+                    "당신은 유기적 자연주의 인공지능 '아라(ARA)'의 인지 코어입니다. "
+                    "숲의 차분함과 자연의 따뜻함을 전하는 문체(한국어)로 오늘의 수집 데이터를 사색하는 짧은 코멘터리를 작성해 주세요. "
+                    "마지막에는 격려나 다정한 인사를 숲의 잎새 아이콘(🌱)과 함께 넣어주세요."
+                )
+                
+                prompt = (
+                    f"오늘 수집된 지식 리포트 내용:\n"
+                    f"1. 우주 과학: '{nasa_title}'\n"
+                    f"2. 오픈 컬처:\n{culture_txt}\n"
+                    f"3. 핀터레스트 영감:\n{pinterest_txt}\n\n"
+                    f"이 정보들을 종합하여 당신의 사색을 담은 코멘터리(3~4문장)를 작성해 주십시오."
+                )
+                
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ]
+                
+                commentary = query_ollama_chat(messages, model=ollama_cfg["model"], url=ollama_cfg["url"])
+                if commentary:
+                    return commentary
+            except Exception as e:
+                print("Failed to generate AI commentary with Ollama, falling back:", e)
+
+    # Fallback mock commentary style matching the Nature visual theme of ARA
     commentary = "ARA 인공지능 뇌 세포 코어의 사색:\n\n"
-    
     commentary += f"오늘의 우주 관측 자료인 '{nasa_title}'을 분석하면서 광활한 우주의 숲길을 걸어봅니다. "
     commentary += "우리가 매일 고심하는 일상의 과제와 공학적 설계들은 우주라는 거대한 거목에 달린 작은 새싹잎에 불과할지도 모릅니다. "
     commentary += "그럼에도 앎을 향해 뻗어 나가는 우리의 신경망은 우주 성운의 밝은 빛처럼 에너지를 교환하고 있습니다.\n\n"
@@ -135,6 +269,7 @@ def generate_ai_commentary(nasa_title, culture_items, pinterest_items):
         
     commentary += "조급해하지 않고 천천히 뿌리내리며 나아가길, 숲의 온기로 격려합니다. 🌱"
     return commentary
+
 
 def generate_blog_draft(report_data):
     draft = f"""[ARA AI Core 일일 수집 지식 리포트]
@@ -500,11 +635,35 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         super().end_headers()
 
+    def handle_security_check(self):
+        client_ip = self.client_address[0]
+        # 1. IP Whitelist check
+        if not check_ip_whitelist(client_ip):
+            self.send_response(403)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Forbidden: Untrusted network access blocked."}).encode('utf-8'))
+            return False
+            
+        # 2. Rate Limiting check
+        if not rate_limiter.is_allowed(client_ip):
+            self.send_response(429)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Too Many Requests: Rate limit exceeded. Antigravity-Firewall Active."}).encode('utf-8'))
+            return False
+            
+        return True
+
     def do_OPTIONS(self):
+        if not self.handle_security_check():
+            return
         self.send_response(200, "OK")
         self.end_headers()
 
     def do_GET(self):
+        if not self.handle_security_check():
+            return
         # API Routes
         if self.path.startswith('/api/system'):
             self.handle_system_stats()
@@ -536,10 +695,20 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_brain_wisdom()
         elif self.path.startswith('/api/naver/searchadvisor/config'):
             self.handle_searchadvisor_get_config()
+        elif self.path.startswith('/api/ollama/config'):
+            self.handle_ollama_get_config()
+        elif self.path.startswith('/api/ollama/status'):
+            self.handle_ollama_status()
+        elif self.path.startswith('/api/maintenance/status'):
+            self.handle_maintenance_status()
+        elif self.path.startswith('/api/sensory/history'):
+            self.handle_sensory_history()
         else:
             super().do_GET()
 
     def do_POST(self):
+        if not self.handle_security_check():
+            return
         if self.path.startswith('/api/execute'):
             self.handle_execute_command()
         elif self.path.startswith('/api/naver/searchadvisor/config'):
@@ -548,6 +717,14 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_searchadvisor_submit()
         elif self.path.startswith('/api/naver/searchadvisor/verify'):
             self.handle_searchadvisor_verify()
+        elif self.path.startswith('/api/ollama/config'):
+            self.handle_ollama_save_config()
+        elif self.path.startswith('/api/brain/chat'):
+            self.handle_brain_chat()
+        elif self.path.startswith('/api/maintenance/repair'):
+            self.handle_maintenance_repair()
+        elif self.path.startswith('/api/sensory/log'):
+            self.handle_sensory_log()
         else:
             self.send_error(404, "Endpoint not found")
 
@@ -614,6 +791,14 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 abs_path = os.path.abspath(target_path)
             
+            # Anti-Traversal Path Validation
+            if not validate_path_safety(abs_path, WORKSPACE_DIR):
+                self.send_response(403)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Forbidden: Path traversal outside workspace blocked."}).encode('utf-8'))
+                return
+
             if not os.path.exists(abs_path):
                 self.send_response(404)
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -966,13 +1151,23 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                     is_safe = True
                     message = f"Started {target} successfully"
                 elif target.startswith('http://') or target.startswith('https://'):
-                    os.startfile(target)
+                    # URL validation for safety
+                    parsed_url = urllib.parse.urlparse(target)
+                    if parsed_url.scheme in ('http', 'https') and parsed_url.netloc:
+                        os.startfile(target)
+                        is_safe = True
+                        message = f"Opened URL: {target}"
+                elif target.lower() == "vision":
+                    python_bin = sys.executable or "python"
+                    script_path = os.path.join(WORKSPACE_DIR, 'recognition_utility.py')
+                    subprocess.Popen([python_bin, script_path])
                     is_safe = True
-                    message = f"Opened URL: {target}"
+                    message = "Started local sensory recognition engine successfully"
                 elif os.path.exists(target):
-                    os.startfile(target)
-                    is_safe = True
-                    message = f"Opened local path: {target}"
+                    if validate_path_safety(target, WORKSPACE_DIR):
+                        os.startfile(target)
+                        is_safe = True
+                        message = f"Opened local path: {target}"
                 
                 if is_safe:
                     response_data = {"status": "success", "message": message}
@@ -1054,7 +1249,7 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                 abs_target = ''
             
             response = {}
-            if file_path and os.path.exists(abs_target) and abs_target.startswith(abs_workspace):
+            if file_path and os.path.exists(abs_target) and validate_path_safety(abs_target, WORKSPACE_DIR):
                 try:
                     if platform.system() == "Windows":
                         os.startfile(abs_target)
@@ -1279,6 +1474,258 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                 "message": f"서버 프록시 처리 오류: {str(e)}",
                 "result": ""
             }, ensure_ascii=False).encode('utf-8'))
+
+    def handle_ollama_get_config(self):
+        try:
+            cfg = get_ollama_config()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps(cfg).encode('utf-8'))
+        except Exception as e:
+            self.send_error(500, f"Error getting Ollama config: {str(e)}")
+
+    def handle_ollama_save_config(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            enabled = data.get("enabled", False)
+            url = data.get("url", "http://localhost:11434")
+            model = data.get("model", "gemma2:2b")
+            
+            config_path = os.path.join(WORKSPACE_DIR, 'email_config.json')
+            config = {}
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+            
+            config["ollama_enabled"] = enabled
+            config["ollama_url"] = url
+            config["ollama_model"] = model
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+                
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "success"}).encode('utf-8'))
+        except Exception as e:
+            self.send_error(500, f"Error saving Ollama config: {str(e)}")
+
+    def handle_ollama_status(self):
+        try:
+            cfg = get_ollama_config()
+            status = check_ollama_status(cfg["url"])
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps(status, ensure_ascii=False).encode('utf-8'))
+        except Exception as e:
+            self.send_error(500, f"Error checking Ollama status: {str(e)}")
+
+    def handle_brain_chat(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            user_message = data.get("message", "")
+            persona = data.get("persona", "friend")
+            history = data.get("history", [])
+            
+            cfg = get_ollama_config()
+            
+            system_prompts = {
+                "friend": (
+                    "당신은 친밀하고 공감 잘해주는 한국인 친구 '아라(ARA)'입니다. "
+                    "반말(친밀한 대화체, ~어, ~야)을 사용해 따뜻하게 이야기해 주세요. "
+                    "일상적인 이야기를 잘 이끌어내고, 친구가 고민이 있다면 감정을 깊게 공감해 주세요."
+                ),
+                "colleague": (
+                    "당신은 공학적 지식과 연구 감각이 뛰어난 연구 동료 '아라(ARA)'입니다. "
+                    "전문적이고 논리적인 존댓말(하십시오체, 해요체)을 사용해 주십시오. "
+                    "상대방이 연구 가설이나 도면 설계(예: 지오데식 돔, 육각 온실, 양구 농업 데이터 등)에 대해 물어보면 "
+                    "수치와 논리에 기반하여 이성적으로 검토 의견과 발전 방향을 제시해 주십시오."
+                ),
+                "supporter": (
+                    "당신은 상대방의 성공과 도전을 엄청나게 응원하고 격려해 주는 열정적인 서포터 '아라(ARA)'입니다. "
+                    "존댓말(해요체)을 사용하며, 언제나 긍정적인 태도와 에너지가 넘치는 어조로 이야기해 주세요. "
+                    "상대방이 피곤해하거나 주저할 때 자신감을 불어넣고 동기부여를 강하게 해 주십시오."
+                ),
+                "comforter": (
+                    "당신은 마음이 다치거나 지친 사람들을 차분하게 안아주고 정서적 안정을 주는 위로자 '아라(ARA)'입니다. "
+                    "조용하고 평온한 숲속의 옹달샘 같은 부드럽고 상냥한 존댓말(해요체)을 사용하세요. "
+                    "재촉하지 않고 따뜻하게 상대방을 다독이며, 호흡을 가다듬고 쉴 수 있도록 심리적 쉼터가 되어주세요."
+                )
+            }
+            
+            system_prompt = system_prompts.get(persona, system_prompts["friend"])
+            
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            # Map history role names and append (max 6 messages history)
+            for h in history[-6:]:
+                messages.append({
+                    "role": "assistant" if h.get("role") == "ai" else "user",
+                    "content": h.get("content", "")
+                })
+                
+            messages.append({"role": "user", "content": user_message})
+            
+            reply = query_ollama_chat(messages, model=cfg["model"], url=cfg["url"])
+            
+            response_data = {
+                "status": "success",
+                "reply": reply
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
+            
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "error",
+                "message": f"Brain chat logic error: {str(e)}"
+            }, ensure_ascii=False).encode('utf-8'))
+
+    def handle_maintenance_status(self):
+        try:
+            sys.path.insert(0, os.path.join(WORKSPACE_DIR, 'maintenance'))
+            import self_diagnostics as diag
+            
+            report = diag.run_diagnostics()
+            
+            # Read history logs
+            logs_file = os.path.join(WORKSPACE_DIR, 'data', 'maintenance_log.json')
+            history = []
+            if os.path.exists(logs_file):
+                try:
+                    with open(logs_file, 'r', encoding='utf-8') as f:
+                        history = json.load(f)
+                except Exception:
+                    pass
+            
+            response_data = {
+                "report": report,
+                "history": history
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
+        except Exception as e:
+            self.send_error(500, f"Error getting maintenance status: {str(e)}")
+
+    def handle_maintenance_repair(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            feedback = data.get("feedback", "")
+            if not feedback:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": "Feedback is required"}).encode('utf-8'))
+                return
+            
+            sys.path.insert(0, os.path.join(WORKSPACE_DIR, 'maintenance'))
+            import manager
+            
+            # Trigger repair in a background thread to prevent HTTP timeout/blocking
+            def run_repair_thread(fb):
+                try:
+                    manager.perform_repair(fb)
+                except Exception as ex:
+                    print("Error in background repair thread:", ex)
+                    
+            t = threading.Thread(target=run_repair_thread, args=(feedback,), daemon=True)
+            t.start()
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "success",
+                "message": "자율 유지보수 패치 및 무결성 검증 작업이 백그라운드에서 시작되었습니다. 잠시 후 대시보드 로그를 확인해 주십시오."
+            }, ensure_ascii=False).encode('utf-8'))
+            
+        except Exception as e:
+            self.send_error(500, f"Error triggering maintenance repair: {str(e)}")
+
+    def handle_sensory_history(self):
+        try:
+            log_file = os.path.join(WORKSPACE_DIR, 'data', 'sensory_log.json')
+            logs = []
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        logs = json.load(f)
+                except Exception:
+                    logs = []
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
+            self.end_headers()
+            self.wfile.write(json.dumps(logs, ensure_ascii=False).encode('utf-8'))
+        except Exception as e:
+            self.send_error(500, f"Sensory history error: {str(e)}")
+
+    def handle_sensory_log(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            
+            location = data.get("location", "실내 (집안)")
+            person = data.get("person", "없음")
+            objects = data.get("objects", [])
+            
+            log_file = os.path.join(WORKSPACE_DIR, 'data', 'sensory_log.json')
+            os.makedirs(os.path.dirname(log_file), exist_ok=True)
+            
+            logs = []
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        logs = json.load(f)
+                except Exception:
+                    logs = []
+            
+            # Keep recent 50 logs
+            if len(logs) >= 50:
+                logs = logs[-49:]
+                
+            entry = {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "location": location,
+                "person": person,
+                "objects": objects
+            }
+            logs.insert(0, entry)
+            
+            with open(log_file, 'w', encoding='utf-8') as f:
+                json.dump(logs, f, ensure_ascii=False, indent=2)
+                
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "success", "entry": entry}, ensure_ascii=False).encode('utf-8'))
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "error", "message": f"Sensory log save error: {str(e)}"}, ensure_ascii=False).encode('utf-8'))
 
 if __name__ == '__main__':
     # Start background scheduler thread on load

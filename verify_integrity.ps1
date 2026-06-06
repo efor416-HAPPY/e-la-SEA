@@ -5,7 +5,7 @@ Write-Host "==================================================" -ForegroundColor
 $allPassed = $true
 
 # 1. Check file existence
-$files = @("index.html", "styles.css", "app.js")
+$files = @("index.html", "style.css", "viewer.css", "app.js", "viewer.js")
 foreach ($file in $files) {
     $path = Join-Path $PSScriptRoot $file
     if (Test-Path $path) {
@@ -20,7 +20,7 @@ foreach ($file in $files) {
 # 2. Check HTML dependency declarations
 if (Test-Path (Join-Path $PSScriptRoot "index.html")) {
     $htmlContent = Get-Content (Join-Path $PSScriptRoot "index.html") -Raw
-    $checkLibrary = @("jszip", "mammoth", "pdf.js", "jspdf", "lucide", "app.js")
+    $checkLibrary = @("jszip", "mammoth", "pdf.js", "jspdf", "lucide", "app.js", "tensorflow", "coco-ssd")
     Write-Host ""
     Write-Host ">> HTML Dependency Declarations Scan:" -ForegroundColor Yellow
     foreach ($lib in $checkLibrary) {
@@ -36,7 +36,7 @@ if (Test-Path (Join-Path $PSScriptRoot "index.html")) {
 # 3. Check JavaScript parser and generator core modules
 if (Test-Path (Join-Path $PSScriptRoot "app.js")) {
     $jsContent = Get-Content (Join-Path $PSScriptRoot "app.js") -Raw
-    $checkFunctions = @("calculateTfidfSummarizer", "buildDocxBlob", "buildHwpxBlob", "buildPdfBlob", "wrapInJava", "btnRunDiagnostics")
+    $checkFunctions = @("calculateTfidfSummarizer", "buildDocxBlob", "buildHwpxBlob", "buildPdfBlob", "wrapInJava", "btnRunDiagnostics", "loadCocoSsdModel", "processSensoryData")
     Write-Host ""
     Write-Host ">> JavaScript Core Engine Modules:" -ForegroundColor Yellow
     foreach ($func in $checkFunctions) {

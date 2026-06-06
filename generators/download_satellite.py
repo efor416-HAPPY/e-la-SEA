@@ -23,6 +23,24 @@ def latlon_to_tile(lat, lon, zoom):
     ytile = int((1.0 - math.log(math.tan(lat_rad) + (1.0 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
     return xtile, ytile
 
+def _download_and_paste_tile(url, headers, canvas, x, y, i, j):
+    """Download a single map tile and paste it into the stitched canvas."""
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            tile_path = f"temp_tile_{x}_{y}.png"
+            with open(tile_path, "wb") as f:
+                f.write(res.content)
+            
+            with Image.open(tile_path) as tile_img:
+                canvas.paste(tile_img, (i * 256, j * 256))
+            
+            os.remove(tile_path)
+            return True
+    except Exception:
+        pass
+    return False
+
 def download_and_stitch(min_lat, max_lat, min_lon, max_lon, zoom, map_type="satellite", output_name="output.png"):
     """
     지정한 위경도 영역의 구글 위성/하이브리드 타일을 다운로드하여 하나의 고화질 이미지로 병합
@@ -75,25 +93,9 @@ def download_and_stitch(min_lat, max_lat, min_lon, max_lon, zoom, map_type="sate
             progress = (i * height_tiles + j + 1) / (width_tiles * height_tiles) * 100
             print(f"\r  - 다운로드 진행률: {progress:.1f}% ({i * height_tiles + j + 1}/{width_tiles * height_tiles})", end="")
             
-            try:
-                # 타일 다운로드 요청 (지연 방지를 위해 타임아웃 설정)
-                res = requests.get(url, headers=headers, timeout=10)
-                if res.status_code == 200:
-                    # 다운로드한 타일을 임시 파일로 저장한 후 Pillow로 읽어 캔버스에 병합
-                    tile_path = f"temp_tile_{x}_{y}.png"
-                    with open(tile_path, "wb") as f:
-                        f.write(res.content)
-                    
-                    tile_img = Image.open(tile_path)
-                    canvas.paste(tile_img, (i * 256, j * 256))
-                    
-                    # 임시 파일 삭제
-                    tile_img.close()
-                    os.remove(tile_path)
-                    success_count += 1
-                else:
-                    fail_count += 1
-            except Exception as e:
+            if _download_and_paste_tile(url, headers, canvas, x, y, i, j):
+                success_count += 1
+            else:
                 fail_count += 1
             
             # 서버 부하 방지 및 차단 회피를 위한 미세 대기
@@ -110,88 +112,101 @@ def download_and_stitch(min_lat, max_lat, min_lon, max_lon, zoom, map_type="sate
         print("[오류] 다운로드 성공한 타일이 없어 파일을 생성하지 못했습니다.")
         return False
 
+def _parse_cli_args(args):
+    """Parse command line arguments in non-interactive mode."""
+    choice = args[1].strip()
+    map_type_arg = args[2].strip()
+    zoom_arg = args[3].strip()
+    
+    print(f"[정보] 인자 기반 비대화형 실행: 지역={choice}, 타입={map_type_arg}, 줌={zoom_arg}")
+    
+    if choice == '1':
+        min_lat, max_lat = 38.25, 38.31
+        min_lon, max_lon = 128.08, 128.16
+        region_name = "yanggu_haean"
+    elif choice == '2':
+        min_lat, max_lat = 38.08, 38.13
+        min_lon, max_lon = 127.96, 128.02
+        region_name = "yanggu_eup"
+    else:
+        # 커스텀 위경도가 인자로 들어온 경우 (예: "custom,38.08,38.13,127.96,128.02")
+        try:
+            parts = choice.split(',')
+            min_lat = float(parts[1])
+            max_lat = float(parts[2])
+            min_lon = float(parts[3])
+            max_lon = float(parts[4])
+            region_name = "custom_region"
+        except Exception as e:
+            print(f"[오류] 잘못된 지역 인자 형식입니다: {e}")
+            return None
+    
+    map_type = "hybrid" if map_type_arg in ['2', 'hybrid'] else "satellite"
+    zoom = int(zoom_arg) if zoom_arg.isdigit() else 15
+    return min_lat, max_lat, min_lon, max_lon, map_type, zoom, region_name
+
+def _prompt_interactive_args():
+    """Prompt user for options in interactive mode."""
+    print("다운로드할 양구군의 세부 지역을 선택하세요:")
+    print("1. 양구군 해안면 (펀치볼 - 사과, 인삼밭 등 주요 전환지)")
+    print("2. 양구읍 일대 (벼 농사 및 비닐하우스 등)")
+    print("3. 직접 위도/경도 범위 입력 (사용자 커스텀)")
+    
+    choice = input("선택 (1/2/3): ").strip()
+    
+    # 디폴트 영역 좌표 설정
+    if choice == '1':
+        min_lat, max_lat = 38.25, 38.31
+        min_lon, max_lon = 128.08, 128.16
+        region_name = "yanggu_haean"
+    elif choice == '2':
+        min_lat, max_lat = 38.08, 38.13
+        min_lon, max_lon = 127.96, 128.02
+        region_name = "yanggu_eup"
+    elif choice == '3':
+        try:
+            min_lat = float(input("최소 위도 (예: 38.08): "))
+            max_lat = float(input("최대 위도 (예: 38.13): "))
+            min_lon = float(input("최소 경도 (예: 127.96): "))
+            max_lon = float(input("최대 경도 (예: 128.02): "))
+            region_name = "custom_region"
+        except ValueError:
+            print("[오류] 올바른 숫자를 입력해주세요.")
+            return None
+    else:
+        print("[오류] 잘못된 선택입니다.")
+        return None
+        
+    print("\n지도 형식을 선택하세요:")
+    print("1. 순수 고화질 위성사진 (satellite)")
+    print("2. 하이브리드 지도 (위성사진 + 지명/지번/도로 경계선 레이어 중첩 - hybrid)")
+    map_choice = input("선택 (1/2): ").strip()
+    map_type = "hybrid" if map_choice == '2' else "satellite"
+    
+    print("\n해상도(줌 레벨)를 선택하세요:")
+    print("- 13: 광대역 (전체적인 흐름 파악용)")
+    print("- 14: 중간 화질 (필지 형태 확인용)")
+    print("- 15: 고화질 (개별 인삼막, 비닐하우스 구분 가능 - 권장)")
+    print("- 16: 초고화질 (다운로드 수량 많음)")
+    zoom_input = input("선택 (13/14/15/16) [기본값 15]: ").strip()
+    zoom = int(zoom_input) if zoom_input in ['13', '14', '15', '16'] else 15
+    
+    return min_lat, max_lat, min_lon, max_lon, map_type, zoom, region_name
+
 def main():
     print("==================================================")
     print("  양구군 최신 위성사진 고화질 다운로드 도구")
     print("==================================================")
     
-    # 만약 커맨드라인 인자가 있으면 비대화형으로 실행
     if len(sys.argv) > 3:
-        choice = sys.argv[1].strip()
-        map_type_arg = sys.argv[2].strip()
-        zoom_arg = sys.argv[3].strip()
-        
-        print(f"[정보] 인자 기반 비대화형 실행: 지역={choice}, 타입={map_type_arg}, 줌={zoom_arg}")
-        
-        if choice == '1':
-            min_lat, max_lat = 38.25, 38.31
-            min_lon, max_lon = 128.08, 128.16
-            region_name = "yanggu_haean"
-        elif choice == '2':
-            min_lat, max_lat = 38.08, 38.13
-            min_lon, max_lon = 127.96, 128.02
-            region_name = "yanggu_eup"
-        else:
-            # 커스텀 위경도가 인자로 들어온 경우 (예: "custom,38.08,38.13,127.96,128.02")
-            try:
-                parts = choice.split(',')
-                min_lat = float(parts[1])
-                max_lat = float(parts[2])
-                min_lon = float(parts[3])
-                max_lon = float(parts[4])
-                region_name = "custom_region"
-            except Exception as e:
-                print(f"[오류] 잘못된 지역 인자 형식입니다: {e}")
-                return
-        
-        map_type = "hybrid" if map_type_arg in ['2', 'hybrid'] else "satellite"
-        zoom = int(zoom_arg) if zoom_arg.isdigit() else 15
-        
+        params = _parse_cli_args(sys.argv)
     else:
-        print("다운로드할 양구군의 세부 지역을 선택하세요:")
-        print("1. 양구군 해안면 (펀치볼 - 사과, 인삼밭 등 주요 전환지)")
-        print("2. 양구읍 일대 (벼 농사 및 비닐하우스 등)")
-        print("3. 직접 위도/경도 범위 입력 (사용자 커스텀)")
+        params = _prompt_interactive_args()
         
-        choice = input("선택 (1/2/3): ").strip()
+    if not params:
+        return
         
-        # 디폴트 영역 좌표 설정
-        if choice == '1':
-            min_lat, max_lat = 38.25, 38.31
-            min_lon, max_lon = 128.08, 128.16
-            region_name = "yanggu_haean"
-        elif choice == '2':
-            min_lat, max_lat = 38.08, 38.13
-            min_lon, max_lon = 127.96, 128.02
-            region_name = "yanggu_eup"
-        elif choice == '3':
-            try:
-                min_lat = float(input("최소 위도 (예: 38.08): "))
-                max_lat = float(input("최대 위도 (예: 38.13): "))
-                min_lon = float(input("최소 경도 (예: 127.96): "))
-                max_lon = float(input("최대 경도 (예: 128.02): "))
-                region_name = "custom_region"
-            except ValueError:
-                print("[오류] 올바른 숫자를 입력해주세요.")
-                return
-        else:
-            print("[오류] 잘못된 선택입니다.")
-            return
-            
-        print("\n지도 형식을 선택하세요:")
-        print("1. 순수 고화질 위성사진 (satellite)")
-        print("2. 하이브리드 지도 (위성사진 + 지명/지번/도로 경계선 레이어 중첩 - hybrid)")
-        map_choice = input("선택 (1/2): ").strip()
-        map_type = "hybrid" if map_choice == '2' else "satellite"
-        
-        print("\n해상도(줌 레벨)를 선택하세요:")
-        print("- 13: 광대역 (전체적인 흐름 파악용)")
-        print("- 14: 중간 화질 (필지 형태 확인용)")
-        print("- 15: 고화질 (개별 인삼막, 비닐하우스 구분 가능 - 권장)")
-        print("- 16: 초고화질 (다운로드 수량 많음)")
-        zoom_input = input("선택 (13/14/15/16) [기본값 15]: ").strip()
-        zoom = int(zoom_input) if zoom_input in ['13', '14', '15', '16'] else 15
-        
+    min_lat, max_lat, min_lon, max_lon, map_type, zoom, region_name = params
     output_file = f"{region_name}_{map_type}_z{zoom}.png"
     
     success = download_and_stitch(min_lat, max_lat, min_lon, max_lon, zoom, map_type, output_file)

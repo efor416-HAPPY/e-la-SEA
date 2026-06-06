@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import os
 
+DIVIDER = "=================================================="
+
 def print_premiere_guide():
-    print("==================================================")
+    print(DIVIDER)
     print("     Adobe Premiere Pro API 자동화 안내 도구")
-    print("==================================================")
+    print(DIVIDER)
     print("\n[중요 개념] 어도비 프리미어 프로(Premiere Pro)는 어떻게 자동화할까요?")
     print("1. 어도비 제품군(프리미어, 에프터이펙트, 포토샵 등)은 독자적인 'ExtendScript (자바스크립트 기반)' 엔진을 사용합니다.")
     print("2. 인벤터나 카티아처럼 파이썬에서 직접 COM(win32com)으로 모든 개별 개체를 다이렉트로 제어하는 방식보다는,")
@@ -28,7 +30,7 @@ def print_premiere_guide():
     print("   - 파이썬의 pywin32를 이용해 프리미어 프로에 ExtendScript 명령어를 전송할 수도 있습니다.")
     print("   (이 방법은 프리미어가 백그라운드 COM 링크를 열어둔 경우에 작동합니다.)")
     
-    print("==================================================")
+    print(DIVIDER)
 
 if __name__ == "__main__":
     print_premiere_guide()

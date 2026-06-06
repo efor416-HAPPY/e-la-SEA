@@ -8,5 +8,8 @@
   "naver_client_id": "",
   "naver_client_secret": "",
   "naver_searchadvisor_token": "",
-  "naver_searchadvisor_site_url": ""
+  "naver_searchadvisor_site_url": "",
+  "ollama_enabled": true,
+  "ollama_url": "http://localhost:11434",
+  "ollama_model": "gemma2:2b"
 }

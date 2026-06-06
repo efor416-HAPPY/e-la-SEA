@@ -21,14 +21,14 @@ def design_dome_in_inventor():
             
         print("  - Inventor 엔진 연결 완료.")
         documents = inventor_app.Documents
-        part_doc = documents.Add(12290, inventor_app.FileManager.GetTemplateFile(12290)) # 12290 = kPartDocumentObject
+        part_doc = documents.Add(12290, inventor_app.FileManager.GetTemplateFile(12290))  # Part document template index
         
         comp_def = part_doc.ComponentDefinition
         user_params = comp_def.Parameters.UserParameters
         
         # 10m 지름 파라미터 추가 (10000 mm = 10 m)
         print("  - 치수 파라미터 등록 (지름: 10,000mm / 반경: 5,000mm)")
-        radius_param = user_parameters = user_params.AddByExpression("Dome_Radius", "5000 mm", "mm")
+        radius_param = user_params.AddByExpression("Dome_Radius", "5000 mm", "mm")
         r_val = radius_param.Value # cm 단위 값 (500.0 cm)
         
         # XY 평면에 스케치 추가
@@ -46,8 +46,6 @@ def design_dome_in_inventor():
         # 회전축의 끝점들을 연결하는 180도 호(Arc) 그리기
         # AddByCenterStartEnd(CenterPoint, StartPoint, EndPoint)
         center_pt = tg.CreatePoint2d(0, 0)
-        start_pt = tg.CreatePoint2d(r_val, 0)
-        end_pt = tg.CreatePoint2d(0, r_val)
         
         # 밑면 닫는 선 그리기 (0,0) -> (R,0)
         bottom_line = sketch_lines.AddByTwoPoints(tg.CreatePoint2d(0, 0), tg.CreatePoint2d(r_val, 0))
@@ -61,7 +59,6 @@ def design_dome_in_inventor():
         print("  - 회전(Revolve) 피처 적용 중 (360도 회전)...")
         # 회전 피처 추가
         revolve_features = comp_def.Features.RevolveFeatures
-        # kJoinOperation = 20481
         revolve_def = revolve_features.CreateRevolveDefinition(profile, axis_line, 20481)
         revolve_def.SetFullAngleExtent() # 360도 전각 회전
         
@@ -153,7 +150,7 @@ def design_dome_in_autocad():
         doc = acad_app.ActiveDocument
         model_space = doc.ModelSpace
         
-        def APoint(x, y, z=0.0):
+        def a_point(x, y, z=0.0):
             return array.array('d', [float(x), float(y), float(z)])
             
         # 3D 돔 모델을 만들기 위해 구(Sphere)를 그리고 반으로 슬라이싱하거나,
@@ -166,21 +163,21 @@ def design_dome_in_autocad():
         
         # 2D 반원 스케치 작성 (오토캐드 3D 돔)
         # 1. 회전축선 추가 (0,0) -> (0, 5000)
-        axis_start = APoint(0, 0)
-        axis_end = APoint(0, r)
-        axis_line = model_space.AddLine(axis_start, axis_end)
+        axis_start = a_point(0, 0)
+        axis_end = a_point(0, r)
+        model_space.AddLine(axis_start, axis_end)
         
         # 2. 바닥 밑선 추가 (0,0) -> (5000, 0)
-        bottom_start = APoint(0, 0)
-        bottom_end = APoint(r, 0)
-        bottom_line = model_space.AddLine(bottom_start, bottom_end)
+        bottom_start = a_point(0, 0)
+        bottom_end = a_point(r, 0)
+        model_space.AddLine(bottom_start, bottom_end)
         
         # 3. 90도 호(Arc) 추가 (중심: 0,0 / 시작점: 5000,0 / 끝점: 0,5000)
         # AddArc(Center, Radius, StartAngle_Rad, EndAngle_Rad)
         # 0도 (동쪽) -> 90도 (북쪽, pi/2)
         import math
-        center = APoint(0, 0)
-        arc = model_space.AddArc(center, r, 0.0, math.pi / 2.0)
+        center = a_point(0, 0)
+        model_space.AddArc(center, r, 0.0, math.pi / 2.0)
         
         acad_app.ZoomAll()
         

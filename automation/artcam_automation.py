@@ -2,10 +2,12 @@
 import os
 import sys
 
+DIVIDER = "=================================================="
+
 def run_artcam_automation():
-    print("==================================================")
+    print(DIVIDER)
     print("      Autodesk ArtCAM (아트캠) API 파이썬 자동화 데모")
-    print("==================================================")
+    print(DIVIDER)
     
     # pywin32 라이브러리 검증
     try:
@@ -44,7 +46,7 @@ def run_artcam_automation():
         print("[진행] 새 작업 모델(New Model: 200mm x 200mm) 생성 중...")
         try:
             # 200x200mm 크기의 신규 프로젝트 모델 개설
-            model = artcam_app.NewModel(200.0, 200.0, 1000, 0) # 0 = Metric (mm)
+            model = artcam_app.NewModel(200.0, 200.0, 1000, 0)  # Metric units (mm)
             print("  - 신규 모델 평면 공간 생성 완료.")
         except AttributeError:
             print("  - 일반 NewModel 호출 실패. 대체 Documents 컬렉션 접근 시도...")
@@ -69,10 +71,10 @@ def run_artcam_automation():
         print(f"[진행] 모델 저장 중: {filename}")
         try:
             model.SaveAs(filepath)
-            print("\n==================================================")
+            print(f"\n{DIVIDER}")
             print("  [성공] ArtCAM 자동화 모델 및 벡터 생성이 완료되었습니다!")
             print(f"  파일 저장 경로: {filepath}")
-            print("==================================================")
+            print(DIVIDER)
         except Exception as save_err:
             print(f"  - 파일 자동 저장 실패: {save_err}")
             

@@ -1236,3 +1236,175 @@ h3,
     color: var(--text-secondary);
     white-space: nowrap;
 }
+
+/* Local AI Panel Styles */
+#ollama-url-input:focus,
+#ollama-model-select:focus,
+#ollama-model-custom:focus {
+    border-color: var(--accent-green) !important;
+    box-shadow: 0 0 0 2px rgba(61, 102, 78, 0.15);
+}
+
+#btn-copy-install-cmd,
+#btn-copy-run-cmd {
+    transition: var(--transition-smooth);
+}
+
+#btn-copy-install-cmd:hover,
+#btn-copy-run-cmd:hover {
+    background-color: var(--accent-sand) !important;
+    border-color: var(--accent-green) !important;
+    color: var(--accent-green) !important;
+}
+
+@media (max-width: 1200px) {
+    .local-ai-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Autonomous Maintenance & Self-Healing Panel Styles */
+#repair-feedback-input:focus {
+    border-color: var(--accent-green) !important;
+    box-shadow: 0 0 0 2px rgba(61, 102, 78, 0.15);
+}
+
+.maintenance-history-item {
+    background: white;
+    border: 1px solid rgba(180, 198, 183, 0.35);
+    border-radius: var(--border-radius-sm);
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: var(--shadow-inner);
+    transition: var(--transition-smooth);
+}
+
+.maintenance-history-item:hover {
+    border-color: var(--accent-sage);
+    transform: translateY(-1px);
+}
+
+.maintenance-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+}
+
+.maintenance-history-time {
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.maintenance-history-badge {
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.maintenance-badge-success {
+    background-color: rgba(61, 102, 78, 0.15);
+    color: #2D503C;
+    border: 1px solid rgba(61, 102, 78, 0.3);
+}
+
+.maintenance-badge-rolled-back {
+    background-color: rgba(194, 99, 91, 0.15);
+    color: #A34841;
+    border: 1px solid rgba(194, 99, 91, 0.3);
+}
+
+.maintenance-history-details {
+    font-size: 10.5px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+.maintenance-history-meta {
+    font-size: 9.5px;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 12px;
+}
+
+@media (max-width: 1200px) {
+    .maintenance-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .maintenance-logs-area {
+        height: 400px !important;
+    }
+}
+
+/* ==========================================================================
+   Sense Core: Real-Time Environment & User Recognition styles
+   ========================================================================== */
+
+/* Toggle Switch slider styles */
+.switch-toggle {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 20px;
+}
+
+.switch-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider-round {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #CBD5E1;
+    transition: .4s;
+    border-radius: 20px;
+}
+
+.slider-round:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+.switch-toggle input:checked + .slider-round {
+    background-color: var(--accent-green);
+}
+
+.switch-toggle input:focus + .slider-round {
+    box-shadow: 0 0 1px var(--accent-green);
+}
+
+.switch-toggle input:checked + .slider-round:before {
+    transform: translateX(14px);
+}
+
+/* Quick launch vision button decoration */
+.btn-quick-vision:hover {
+    background: var(--accent-green) !important;
+    color: white !important;
+    border-color: var(--accent-green-hover) !important;
+}
+
+.btn-quick-vision i {
+    color: var(--text-primary) !important;
+}
+
+.btn-quick-vision:hover i {
+    color: white !important;
+}

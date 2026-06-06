@@ -9,6 +9,10 @@ solution:
   target-types:
     - type: MyBoard
       device: ARMCM4
+      target-set:
+        - set:
+          images:
+            - project-context: MyProject.Debug
 
   build-types:
     - type: Debug
@@ -16,3 +20,4 @@ solution:
 
   projects:
     - project: ./MyProject/MyProject.cproject.yml
+  created-for: CMSIS-Toolbox@2.12.0

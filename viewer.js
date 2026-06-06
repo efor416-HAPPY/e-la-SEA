@@ -13,6 +13,16 @@ function safeJsonParse(str, defaultVal = {}) {
     }
 }
 
+function escapeHtml(text) {
+    if (typeof text !== 'string') text = String(text);
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 // BADA Ambient Sound Synthesizer (Web Audio API)
 const BadaAudioManager = {
     audioCtx: null,
@@ -46,13 +56,66 @@ const BadaAudioManager = {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     },
 
+    getSoundState(type) {
+        if (type === 'birds') return this.states.birds;
+        if (type === 'waves') return this.states.waves;
+        if (type === 'spring') return this.states.spring;
+        if (type === 'rain') return this.states.rain;
+        return false;
+    },
+
+    setSoundState(type, val) {
+        if (type === 'birds') this.states.birds = val;
+        else if (type === 'waves') this.states.waves = val;
+        else if (type === 'spring') this.states.spring = val;
+        else if (type === 'rain') this.states.rain = val;
+    },
+
+    getVolume(type) {
+        if (type === 'birds') return this.volumes.birds;
+        if (type === 'waves') return this.volumes.waves;
+        if (type === 'spring') return this.volumes.spring;
+        if (type === 'rain') return this.volumes.rain;
+        return 0.5;
+    },
+
+    getSource(type) {
+        if (type === 'birds') return this.sources.birds;
+        if (type === 'waves') return this.sources.waves;
+        if (type === 'spring') return this.sources.spring;
+        if (type === 'rain') return this.sources.rain;
+        return null;
+    },
+
+    setSource(type, val) {
+        if (type === 'birds') this.sources.birds = val;
+        else if (type === 'waves') this.sources.waves = val;
+        else if (type === 'spring') this.sources.spring = val;
+        else if (type === 'rain') this.sources.rain = val;
+    },
+
+    getGain(type) {
+        if (type === 'birds') return this.gains.birds;
+        if (type === 'waves') return this.gains.waves;
+        if (type === 'spring') return this.gains.spring;
+        if (type === 'rain') return this.gains.rain;
+        return null;
+    },
+
+    setGain(type, val) {
+        if (type === 'birds') this.gains.birds = val;
+        else if (type === 'waves') this.gains.waves = val;
+        else if (type === 'spring') this.gains.spring = val;
+        else if (type === 'rain') this.gains.rain = val;
+    },
+
     toggleSound(type) {
         this.init();
         if (this.audioCtx.state === 'suspended') {
             this.audioCtx.resume();
         }
 
-        if (this.states[type]) {
+        if (this.getSoundState(type)) {
             this.stopSound(type);
         } else {
             this.startSound(type);
@@ -60,44 +123,52 @@ const BadaAudioManager = {
     },
 
     setVolume(type, val) {
-        this.volumes[type] = parseFloat(val);
-        if (this.gains[type] && this.audioCtx) {
-            this.gains[type].gain.setValueAtTime(this.volumes[type], this.audioCtx.currentTime);
+        const floatVal = parseFloat(val);
+        if (type === 'birds') this.volumes.birds = floatVal;
+        else if (type === 'waves') this.volumes.waves = floatVal;
+        else if (type === 'spring') this.volumes.spring = floatVal;
+        else if (type === 'rain') this.volumes.rain = floatVal;
+
+        const gainNode = this.getGain(type);
+        const volumeVal = this.getVolume(type);
+        if (gainNode && this.audioCtx) {
+            gainNode.gain.setValueAtTime(volumeVal, this.audioCtx.currentTime);
         }
     },
 
     startSound(type) {
-        this.states[type] = true;
+        this.setSoundState(type, true);
         const btn = document.getElementById('soundBtn' + type.charAt(0).toUpperCase() + type.slice(1));
         if (btn) {
             btn.classList.add('active');
         }
 
         if (type === 'rain') this.playRain();
-        if (type === 'waves') this.playWaves();
-        if (type === 'spring') this.playSpring();
-        if (type === 'birds') this.playBirds();
+        else if (type === 'waves') this.playWaves();
+        else if (type === 'spring') this.playSpring();
+        else if (type === 'birds') this.playBirds();
     },
 
     stopSound(type) {
-        this.states[type] = false;
+        this.setSoundState(type, false);
         const btn = document.getElementById('soundBtn' + type.charAt(0).toUpperCase() + type.slice(1));
         if (btn) {
             btn.classList.remove('active');
         }
 
-        if (this.sources[type]) {
+        const source = this.getSource(type);
+        if (source) {
             try {
-                if (Array.isArray(this.sources[type])) {
-                    this.sources[type].forEach(s => s.stop());
+                if (Array.isArray(source)) {
+                    source.forEach(s => s.stop());
                 } else {
-                    this.sources[type].stop();
+                    source.stop();
                 }
             } catch (e) {
                 console.warn("Failed to stop audio buffer source:", e);
             } finally {
-                this.sources[type] = null;
-                this.gains[type] = null;
+                this.setSource(type, null);
+                this.setGain(type, null);
             }
         }
     },
@@ -108,16 +179,18 @@ const BadaAudioManager = {
         const output = noiseBuffer.getChannelData(0);
         
         let lastOut = 0.0;
+        const tempArray = [];
         for (let i = 0; i < bufferSize; i++) {
             const white = Math.random() * 2 - 1;
             if (type === 'pink') {
-                output[i] = (lastOut + (0.02 * white)) / 1.02;
-                lastOut = output[i];
-                output[i] *= 3.5;
+                const val = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = val;
+                tempArray.push(val * 3.5);
             } else {
-                output[i] = white;
+                tempArray.push(white);
             }
         }
+        output.set(tempArray);
         return noiseBuffer;
     },
 
@@ -403,10 +476,10 @@ function showToast(message, type = 'info') {
     if (type === 'success') iconName = 'check-circle';
     if (type === 'error') iconName = 'alert-triangle';
     
-    toast.innerHTML = `
-        <i data-lucide="${iconName}" class="toast-icon"></i>
-        <span>${message}</span>
-    `;
+    toast.innerHTML = `<i data-lucide="${iconName}" class="toast-icon"></i>`;
+    const span = document.createElement('span');
+    span.textContent = message;
+    toast.appendChild(span);
     
     toastContainer.appendChild(toast);
     lucide.createIcons();
@@ -474,16 +547,16 @@ async function fetchProjectFiles() {
         console.error("실시간 파일 목록 로드 실패. 데모 데이터로 대체합니다.", err);
         showToast("로컬 서버 미작동. 데모용 기본 파일 목록을 로드했습니다.", "info");
         viewerState.files = [
-            { name: "greenhouse_details.dxf", path: "greenhouse_details.dxf", size: 20259, ext: "dxf" },
-            { name: "greenhouse_layout.dxf", path: "greenhouse_layout.dxf", size: 22167, ext: "dxf" },
-            { name: "greenhouse_render.png", path: "greenhouse_render.png", size: 1099860, ext: "png" },
-            { name: "dome_design_render.png", path: "dome_design_render.png", size: 928411, ext: "png" },
-            { name: "dome_detailed_blueprint.png", path: "dome_detailed_blueprint.png", size: 967849, ext: "png" },
-            { name: "dome_part_drawings.png", path: "dome_part_drawings.png", size: 904690, ext: "png" },
-            { name: "yanggu_haean_hybrid_z15.png", path: "yanggu_haean_hybrid_z15.png", size: 7752779, ext: "png" },
-            { name: "yanggu_all_crop_transitions.csv", path: "yanggu_all_crop_transitions.csv", size: 23105, ext: "csv" },
-            { name: "nature_calendar_bg.png", path: "nature_calendar_bg.png", size: 636587, ext: "png" },
-            { name: "sea_background.png", path: "sea_background.png", size: 976094, ext: "png" }
+            { name: "greenhouse_details.dxf", path: "designs/greenhouse_details.dxf", size: 20259, ext: "dxf" },
+            { name: "greenhouse_layout.dxf", path: "designs/greenhouse_layout.dxf", size: 22167, ext: "dxf" },
+            { name: "greenhouse_render.png", path: "designs/greenhouse_render.png", size: 1099860, ext: "png" },
+            { name: "dome_design_render.png", path: "designs/dome_design_render.png", size: 928411, ext: "png" },
+            { name: "dome_detailed_blueprint.png", path: "designs/dome_detailed_blueprint.png", size: 967849, ext: "png" },
+            { name: "dome_part_drawings.png", path: "designs/dome_part_drawings.png", size: 904690, ext: "png" },
+            { name: "yanggu_haean_hybrid_z15.png", path: "designs/yanggu_haean_hybrid_z15.png", size: 7752779, ext: "png" },
+            { name: "yanggu_all_crop_transitions.csv", path: "data/yanggu_all_crop_transitions.csv", size: 23105, ext: "csv" },
+            { name: "nature_calendar_bg.png", path: "designs/nature_calendar_bg.png", size: 636587, ext: "png" },
+            { name: "sea_background.png", path: "designs/sea_background.png", size: 976094, ext: "png" }
         ];
         applyFilters();
     } finally {
@@ -530,17 +603,19 @@ function renderExplorerTree(files) {
         return;
     }
     
-    const groups = {};
+    const groups = new Map();
     files.forEach(file => {
         let folder = '루트 폴더';
         if (file.path.includes('/')) {
             folder = file.path.substring(0, file.path.lastIndexOf('/'));
         }
-        if (!groups[folder]) groups[folder] = [];
-        groups[folder].push(file);
+        if (!groups.has(folder)) {
+            groups.set(folder, []);
+        }
+        groups.get(folder).push(file);
     });
     
-    const sortedFolders = Object.keys(groups).sort((a, b) => {
+    const sortedFolders = Array.from(groups.keys()).sort((a, b) => {
         if (a === '루트 폴더') return -1;
         if (b === '루트 폴더') return 1;
         return a.localeCompare(b);
@@ -552,10 +627,13 @@ function renderExplorerTree(files) {
         
         const titleDiv = document.createElement('div');
         titleDiv.className = 'folder-title';
-        titleDiv.innerHTML = `<i data-lucide="folder" style="width: 14px; height: 14px;"></i><span>${folder}</span>`;
+        titleDiv.innerHTML = '<i data-lucide="folder" style="width: 14px; height: 14px;"></i>';
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = folder;
+        titleDiv.appendChild(titleSpan);
         folderDiv.appendChild(titleDiv);
         
-        const sortedFiles = groups[folder].sort((a, b) => a.name.localeCompare(b.name));
+        const sortedFiles = groups.get(folder).sort((a, b) => a.name.localeCompare(b.name));
         
         sortedFiles.forEach(file => {
             const fileItem = document.createElement('div');
@@ -566,18 +644,17 @@ function renderExplorerTree(files) {
             
             const sizeStr = formatBytes(file.size);
             
-            fileItem.innerHTML = `
-                <div class="tree-file-left">
-                    <div class="tree-file-icon badge-${file.ext}">${file.ext}</div>
-                    <div class="tree-file-details">
-                        <div class="tree-file-name" title="${file.name}">${file.name}</div>
-                        <div class="tree-file-size">${sizeStr}</div>
-                    </div>
-                </div>
-                <div class="tree-file-action">
-                    <i data-lucide="chevron-right" style="width: 14px; height: 14px; color: var(--text-muted);"></i>
-                </div>
-            `;
+            fileItem.innerHTML = 
+                '<div class="tree-file-left">' +
+                    '<div class="tree-file-icon badge-' + escapeHtml(file.ext) + '">' + escapeHtml(file.ext) + '</div>' +
+                    '<div class="tree-file-details">' +
+                        '<div class="tree-file-name" title="' + escapeHtml(file.name) + '">' + escapeHtml(file.name) + '</div>' +
+                        '<div class="tree-file-size">' + escapeHtml(sizeStr) + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="tree-file-action">' +
+                    '<i data-lucide="chevron-right" style="width: 14px; height: 14px; color: var(--text-muted);"></i>' +
+                '</div>';
             
             fileItem.addEventListener('click', () => {
                 const items = document.querySelectorAll('.tree-file-item');
@@ -651,10 +728,10 @@ function renderBehanceGrid(files) {
         const randHeight = 160 + Math.floor(Math.random() * 110); // staggered height: 160px to 270px
         
         if (['jpg', 'jpeg', 'png', 'gif'].includes(file.ext)) {
-            thumbContent = `<img class="pin-thumbnail-img" src="${getFileUrl(file.path)}" alt="${file.name}" style="height: auto; max-height: 250px;">`;
+            thumbContent = '<img class="pin-thumbnail-img" src="' + escapeHtml(getFileUrl(file.path)) + '" alt="' + escapeHtml(file.name) + '" style="height: auto; max-height: 250px;">';
         } else {
             let iconText = file.ext.substring(0, 3).toUpperCase();
-            thumbContent = `<div class="pin-thumbnail-fallback" style="height: ${randHeight}px;">${iconText}</div>`;
+            thumbContent = '<div class="pin-thumbnail-fallback" style="height: ' + randHeight + 'px;">' + escapeHtml(iconText) + '</div>';
         }
         
         const pathKey = 'cad_social_' + file.path;
@@ -678,44 +755,43 @@ function renderBehanceGrid(files) {
         const saveBtnText = isSaved ? '저장됨' : '저장';
         const saveBtnClass = isSaved ? 'pin-save-btn saved' : 'pin-save-btn';
         
-        card.innerHTML = `
-            <div class="pin-thumbnail-container" style="position:relative;">
-                ${thumbContent}
-                <div class="pin-hover-overlay">
-                    <div class="pin-overlay-top">
-                        <button class="${saveBtnClass}" title="BADA 보드에 저장" onclick="event.stopPropagation(); toggleSavePin('${file.path}', this)">
-                            <i data-lucide="bookmark" style="width: 12px; height: 12px; fill: currentColor;"></i>
-                            <span>${saveBtnText}</span>
-                        </button>
-                    </div>
-                    <div class="pin-overlay-bottom">
-                        <a class="pin-action-btn" title="다운로드" href="${getFileUrl(file.path)}" download onclick="event.stopPropagation();">
-                            <i data-lucide="download" style="width: 14px; height: 14px;"></i>
-                        </a>
-                        <button class="pin-action-btn btn-appreciate-quick" title="추천" onclick="event.stopPropagation(); quickAppreciate('${file.path}', this)">
-                            <i data-lucide="heart" style="width: 14px; height: 14px; fill: currentColor;"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="pin-card-content">
-                <div class="pin-card-title" title="${file.name}">${file.name}</div>
-                <div class="pin-card-tags">
-                    <span class="pin-card-tag">${fileTypeTag}</span>
-                    <span class="pin-card-tag" style="background:rgba(16,185,129,0.08);color:#10b981;">#Local</span>
-                </div>
-            </div>
-            <div class="pin-card-footer">
-                <div class="pin-author-info">
-                    <div class="pin-author-avatar">🌊</div>
-                    <div class="pin-author-name">BADA</div>
-                </div>
-                <div class="pin-stats">
-                    <span class="pin-stat-item"><i data-lucide="eye" style="width: 11px; height: 11px;"></i> <span class="val-views">${data.views}</span></span>
-                    <span class="pin-stat-item"><i data-lucide="heart" style="width: 11px; height: 11px; color: var(--danger); fill: currentColor;"></i> <span class="val-likes">${data.appreciations}</span></span>
-                </div>
-            </div>
-        `;
+        card.innerHTML = 
+            '<div class="pin-thumbnail-container" style="position:relative;">' +
+                thumbContent +
+                '<div class="pin-hover-overlay">' +
+                    '<div class="pin-overlay-top">' +
+                        '<button class="' + escapeHtml(saveBtnClass) + '" title="BADA 보드에 저장" onclick="event.stopPropagation(); toggleSavePin(\'' + escapeHtml(file.path) + '\', this)">' +
+                            '<i data-lucide="bookmark" style="width: 12px; height: 12px; fill: currentColor;"></i>' +
+                            '<span>' + escapeHtml(saveBtnText) + '</span>' +
+                        '</button>' +
+                    '</div>' +
+                    '<div class="pin-overlay-bottom">' +
+                        '<a class="pin-action-btn" title="다운로드" href="' + escapeHtml(getFileUrl(file.path)) + '" download onclick="event.stopPropagation();">' +
+                            '<i data-lucide="download" style="width: 14px; height: 14px;"></i>' +
+                        '</a>' +
+                        '<button class="pin-action-btn btn-appreciate-quick" title="추천" onclick="event.stopPropagation(); quickAppreciate(\'' + escapeHtml(file.path) + '\', this)">' +
+                            '<i data-lucide="heart" style="width: 14px; height: 14px; fill: currentColor;"></i>' +
+                        '</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="pin-card-content">' +
+                '<div class="pin-card-title" title="' + escapeHtml(file.name) + '">' + escapeHtml(file.name) + '</div>' +
+                '<div class="pin-card-tags">' +
+                    '<span class="pin-card-tag">' + escapeHtml(fileTypeTag) + '</span>' +
+                    '<span class="pin-card-tag" style="background:rgba(16,185,129,0.08);color:#10b981;">#Local</span>' +
+                '</div>' +
+            '</div>' +
+            '<div class="pin-card-footer">' +
+                '<div class="pin-author-info">' +
+                    '<div class="pin-author-avatar">🌊</div>' +
+                    '<div class="pin-author-name">BADA</div>' +
+                '</div>' +
+                '<div class="pin-stats">' +
+                    '<span class="pin-stat-item"><i data-lucide="eye" style="width: 11px; height: 11px;"></i> <span class="val-views">' + escapeHtml(data.views) + '</span></span>' +
+                    '<span class="pin-stat-item"><i data-lucide="heart" style="width: 11px; height: 11px; color: var(--danger); fill: currentColor;"></i> <span class="val-likes">' + escapeHtml(data.appreciations) + '</span></span>' +
+                '</div>' +
+            '</div>';
         
         card.addEventListener('click', () => {
             selectFile(file);
@@ -758,16 +834,15 @@ function loadComments(filePath) {
         
         const firstLetter = c.name ? c.name.charAt(0).toUpperCase() : 'U';
         
-        item.innerHTML = `
-            <div class="comment-avatar">${firstLetter}</div>
-            <div class="comment-content">
-                <div class="comment-header">
-                    <span class="comment-author">${c.name}</span>
-                    <span class="comment-time">${c.time}</span>
-                </div>
-                <div class="comment-text">${c.text}</div>
-            </div>
-        `;
+        item.innerHTML = 
+            '<div class="comment-avatar">' + escapeHtml(firstLetter) + '</div>' +
+            '<div class="comment-content">' +
+                '<div class="comment-header">' +
+                    '<span class="comment-author">' + escapeHtml(c.name) + '</span>' +
+                    '<span class="comment-time">' + escapeHtml(c.time) + '</span>' +
+                '</div>' +
+                '<div class="comment-text">' + escapeHtml(c.text) + '</div>' +
+            '</div>';
         listEl.appendChild(item);
     });
     listEl.scrollTop = listEl.scrollHeight;
@@ -1405,15 +1480,15 @@ function parseDxfText(dxfText) {
     let inEntitiesSection = false;
     
     while (i < lines.length) {
-        const groupCode = parseInt(lines[i]);
-        const value = lines[i+1];
+        const groupCode = parseInt(lines.at(i));
+        const value = lines.at(i + 1);
         if (isNaN(groupCode) || value === undefined) {
             i += 1;
             continue;
         }
         
         if (groupCode === 0 && value === "SECTION") {
-            if (parseInt(lines[i+2]) === 2 && lines[i+3] === "ENTITIES") {
+            if (parseInt(lines.at(i + 2)) === 2 && lines.at(i + 3) === "ENTITIES") {
                 inEntitiesSection = true;
                 i += 4;
                 continue;
@@ -1430,8 +1505,8 @@ function parseDxfText(dxfText) {
             i += 2;
             
             while (i < lines.length) {
-                const subCode = parseInt(lines[i]);
-                const subVal = lines[i+1];
+                const subCode = parseInt(lines.at(i));
+                const subVal = lines.at(i + 1);
                 if (subCode === 0) break; // Start of next entity
                 
                 if (subCode === 10) entityData.x = parseFloat(subVal);
@@ -1451,7 +1526,10 @@ function parseDxfText(dxfText) {
                         entityData.vertices.push({ x: parseFloat(subVal), y: 0 });
                     } else if (subCode === 20) {
                         if (entityData.vertices && entityData.vertices.length > 0) {
-                            entityData.vertices[entityData.vertices.length - 1].y = parseFloat(subVal);
+                            const lastVertex = entityData.vertices.at(-1);
+                            if (lastVertex) {
+                                lastVertex.y = parseFloat(subVal);
+                            }
                         }
                     }
                 }
@@ -1875,7 +1953,13 @@ function searchAutolinks(file) {
                 btnIcon = 'file-text';
             }
             
-            btn.innerHTML = `<i data-lucide="${btnIcon}"></i><span>${btnLabel}</span>`;
+            btn.innerHTML = '';
+            const icon = document.createElement('i');
+            icon.setAttribute('data-lucide', btnIcon);
+            const span = document.createElement('span');
+            span.textContent = btnLabel;
+            btn.appendChild(icon);
+            btn.appendChild(span);
             
             btn.addEventListener('click', () => {
                 // Find matching tree file item to set active

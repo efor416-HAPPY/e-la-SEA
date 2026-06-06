@@ -2,6 +2,10 @@
 import csv
 import os
 
+LAND_TYPE_PADDY = "답 (논)"
+CROP_TYPE_RICE = "벼 (쌀)"
+STATUS_REPLACED = "대체 완료"
+
 def create_excel_compatible_csv():
     file_path = "yanggu_crop_transitions.csv"
     
@@ -28,11 +32,11 @@ def create_excel_compatible_csv():
         [
             1, 
             "강원특별자치도 양구군 해안면 현리 234-1", 
-            "답 (논)", 
-            "벼 (쌀)", 
+            LAND_TYPE_PADDY, 
+            CROP_TYPE_RICE, 
             "사과", 
             "사과 과수원",
-            "대체 완료", 
+            STATUS_REPLACED, 
             "2022-2024 항공사진 대비 2025-2026 사진에서 일정한 바둑판 격자형 나무 묘목 및 지지대 포착. 가을철 반사 필름 반짝임 관찰됨.", 
             38.2852, 
             128.1284,
@@ -41,11 +45,11 @@ def create_excel_compatible_csv():
         [
             2, 
             "강원특별자치도 양구군 해안면 오창리 54-2", 
-            "답 (논)", 
-            "벼 (쌀)", 
+            LAND_TYPE_PADDY, 
+            CROP_TYPE_RICE, 
             "인삼", 
             "인삼밭 (차광막)",
-            "대체 완료", 
+            STATUS_REPLACED, 
             "2025년 중순 이후 청색 및 흑색 차광막 가림막 지붕 구조물이 규칙적인 조밀한 사선 패턴으로 필지 전체에 배치됨.", 
             38.2914, 
             128.1126,
@@ -54,11 +58,11 @@ def create_excel_compatible_csv():
         [
             3, 
             "강원특별자치도 양구군 해안면 만대리 810-5", 
-            "답 (논)", 
-            "벼 (쌀)", 
+            LAND_TYPE_PADDY, 
+            CROP_TYPE_RICE, 
             "비닐하우스", 
             "시설재배 (비닐하우스)",
-            "대체 완료", 
+            STATUS_REPLACED, 
             "2022년 항공뷰 대비 2025년 말 촬영분에서 다수의 은백색 터널형 하우스 철골 구조물 및 비닐 씌움 완료 상태 확인.", 
             38.2709, 
             128.1402,
@@ -67,11 +71,11 @@ def create_excel_compatible_csv():
         [
             4, 
             "강원특별자치도 양구군 양구읍 송청리 456", 
-            "답 (논)", 
-            "벼 (쌀)", 
+            LAND_TYPE_PADDY, 
+            CROP_TYPE_RICE, 
             "들깨", 
             "일반 밭작물",
-            "대체 완료", 
+            STATUS_REPLACED, 
             "물이 차 있던 논 지형에서 2025-2026년 배수로 개설 및 검은색 비닐 멀칭이 줄지어 정돈된 일반 밭(전)으로 작물 전환 판독.", 
             38.1092, 
             127.9945,
@@ -80,11 +84,11 @@ def create_excel_compatible_csv():
         [
             5, 
             "강원특별자치도 양구군 양구읍 정림리 78-2", 
-            "답 (논)", 
-            "벼 (쌀)", 
+            LAND_TYPE_PADDY, 
+            CROP_TYPE_RICE, 
             "옥수수", 
             "일반 밭작물",
-            "대체 완료", 
+            STATUS_REPLACED, 
             "2025년 여름 위성/항공사진 상에 옥수수 특유의 녹색 덤불 식생 줄 및 수확 후 옥수수대 잔해 형태 관찰됨.", 
             38.1023, 
             127.9789,
@@ -93,11 +97,11 @@ def create_excel_compatible_csv():
         [
             6, 
             "강원특별자치도 양구군 해안면 이현리 102-1", 
-            "답 (논)", 
-            "벼 (쌀)", 
+            LAND_TYPE_PADDY, 
+            CROP_TYPE_RICE, 
             "사과", 
             "사과 과수원",
-            "대체 완료", 
+            STATUS_REPLACED, 
             "해발 500m 고지 분지로, 2024년 말 굴삭기 기반 과수 배수로 평탄화 작업 및 2025-2026년 과수 묘목 고정식 파이프 라인 식별.", 
             38.2618, 
             128.0945,
@@ -106,11 +110,11 @@ def create_excel_compatible_csv():
         [
             7, 
             "강원특별자치도 양구군 해안면 현리 12-4", 
-            "답 (논)", 
-            "벼 (쌀)", 
+            LAND_TYPE_PADDY, 
+            CROP_TYPE_RICE, 
             "인삼", 
             "인삼밭 (차광막)",
-            "대체 완료", 
+            STATUS_REPLACED, 
             "2025년 봄철 정밀 항공사진 상에 검정색 인삼 재배용 해가림막이 남북 방향으로 빗금형태로 배열된 것이 선명하게 관찰됨.", 
             38.2831, 
             128.1215,

@@ -5,44 +5,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-def convert_csv_to_beautiful_xlsx():
-    # 스크립트 파일이 위치한 디렉토리로 작업 디렉토리 변경
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    if script_dir:
-        os.chdir(script_dir)
-        
-    csv_file = "yanggu_all_crop_transitions.csv"
-    xlsx_file = "yanggu_all_crop_transitions.xlsx"
-    
-    if not os.path.exists(csv_file):
-        print(f"[오류] 원본 CSV 파일이 존재하지 않습니다: {csv_file}")
-        return
-        
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "양구군 경작지 전환 대조표"
-    
-    # 그리드라인 보이기 설정
-    ws.views.sheetView[0].showGridLines = True
-    
-    # 폰트 설정 (맑은 고딕 또는 프리미엄 폰트 대체용)
-    font_title = Font(name="맑은 고딕", size=16, bold=True, color="1F4E79")
-    font_header = Font(name="맑은 고딕", size=11, bold=True, color="FFFFFF")
-    font_data = Font(name="맑은 고딕", size=10)
-    font_note = Font(name="맑은 고딕", size=9, italic=True, color="555555")
-    
-    # 채우기 색상 설정 (Hex)
-    fill_header = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
-    fill_zebra = PatternFill(start_color="F2F6F9", end_color="F2F6F9", fill_type="solid")
-    
-    # 테두리 설정
-    thin_border_side = Side(style='thin', color='D9D9D9')
-    border_data = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
-    
-    # 정렬 설정
-    align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    align_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
-    
+FONT_NAME = "맑은 고딕"
+
+def _setup_sheet(ws, font_title, font_note):
     # 1. 상단 타이틀 추가
     ws.merge_cells("A1:L1")
     ws["A1"] = "양구군 농경지 경작물 대체 실태 대조 분석표 (2022~2026)"
@@ -56,8 +21,8 @@ def convert_csv_to_beautiful_xlsx():
     ws["A2"].font = font_note
     ws["A2"].alignment = Alignment(horizontal="left", vertical="center")
     ws.row_dimensions[2].height = 20
-    
-    # 3. CSV 데이터 로드 및 시트 작성
+
+def _populate_data(ws, csv_file, font_header, font_data, fill_header, fill_zebra, border_data, align_center, align_left):
     with open(csv_file, mode='r', encoding='utf-8-sig') as f:
         reader = csv.reader(f)
         headers = next(reader)
@@ -99,8 +64,8 @@ def convert_csv_to_beautiful_xlsx():
                     cell.alignment = align_center
                 else:  # 소재지 주소, 위성 판독 근거
                     cell.alignment = align_left
-                    
-    # 4. 컬럼 너비 자동 조정
+
+def _adjust_column_widths(ws):
     for col in ws.columns:
         max_len = 0
         col_letter = get_column_letter(col[0].column)
@@ -128,6 +93,50 @@ def convert_csv_to_beautiful_xlsx():
             adjusted_width = 50
             
         ws.column_dimensions[col_letter].width = adjusted_width
+
+def convert_csv_to_beautiful_xlsx():
+    # 스크립트 파일이 위치한 디렉토리로 작업 디렉토리 변경
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if script_dir:
+        os.chdir(script_dir)
+        
+    csv_file = "yanggu_all_crop_transitions.csv"
+    xlsx_file = "yanggu_all_crop_transitions.xlsx"
+    
+    if not os.path.exists(csv_file):
+        print(f"[오류] 원본 CSV 파일이 존재하지 않습니다: {csv_file}")
+        return
+        
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "양구군 경작지 전환 대조표"
+    
+    # 그리드라인 보이기 설정
+    ws.views.sheetView[0].showGridLines = True
+    
+    # 폰트 설정 (맑은 고딕 또는 프리미엄 폰트 대체용)
+    font_title = Font(name=FONT_NAME, size=16, bold=True, color="1F4E79")
+    font_header = Font(name=FONT_NAME, size=11, bold=True, color="FFFFFF")
+    font_data = Font(name=FONT_NAME, size=10)
+    font_note = Font(name=FONT_NAME, size=9, italic=True, color="555555")
+    
+    # 채우기 색상 설정 (Hex)
+    fill_header = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    fill_zebra = PatternFill(start_color="F2F6F9", end_color="F2F6F9", fill_type="solid")
+    
+    # 테두리 설정
+    thin_border_side = Side(style='thin', color='D9D9D9')
+    border_data = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+    
+    # 정렬 설정
+    align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    align_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    
+    _setup_sheet(ws, font_title, font_note)
+    
+    _populate_data(ws, csv_file, font_header, font_data, fill_header, fill_zebra, border_data, align_center, align_left)
+                    
+    _adjust_column_widths(ws)
         
     wb.save(xlsx_file)
     print(f"[성공] 고품격 엑셀 파일 변환이 완료되었습니다: {xlsx_file}")

@@ -13,6 +13,17 @@ let currentPath = '';
 let cameraStream = null;
 let isCameraOn = false;
 
+// Sensory Recognition Globals
+let cocoModel = null;
+let isModelLoading = false;
+let visionDetectionTimeout = null;
+let lastSensoryLogTime = 0;
+let lastSensoryState = { location: '', person: '', objects: '' };
+
+// Local AI (Ollama) state variables
+window.ollamaEnabled = false;
+window.ollamaOnline = false;
+
 function safeJsonParse(str, defaultVal = null) {
     try {
         return str ? JSON.parse(str) : defaultVal;
@@ -61,6 +72,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // 4. Connect Backend Data
     initBackendConnection();
     initSearchAdvisorConnection();
+    initMaintenanceConnection();
 
     // 5. Setup Action Listeners
     setupEventListeners();
@@ -114,6 +126,17 @@ async function toggleCamera() {
         visionStatus.textContent = "시각 데이터 비활성화됨";
         icon.setAttribute('data-lucide', 'video-off');
         isCameraOn = false;
+
+        // Clear detection loop
+        if (visionDetectionTimeout) {
+            clearTimeout(visionDetectionTimeout);
+            visionDetectionTimeout = null;
+        }
+        const canvas = document.getElementById('vision-canvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
     } else {
         // Turn ON
         try {
@@ -132,6 +155,11 @@ async function toggleCamera() {
             visionStatus.textContent = "시각 데이터 활성화됨";
             icon.setAttribute('data-lucide', 'video');
             isCameraOn = true;
+
+            // Load model and start TF.js loop
+            loadCocoSsdModel().then(() => {
+                startDetectionLoop();
+            });
         } catch (err) {
             console.warn("Webcam access denied or unavailable:", err);
             visionStatus.textContent = "카메라를 찾을 수 없음 (시각 차단됨)";
@@ -219,7 +247,7 @@ function drawAudioWave() {
         let sumSq = 0;
         
         for (let i = 0; i < bufferLength; i++) {
-            const v = dataArray[i] / 128.0; // Normalized -1 to 1
+            const v = dataArray.at(i) / 128.0; // Normalized -1 to 1
             const y = v * canvas.height / 2;
             
             // volume calc
@@ -243,6 +271,13 @@ function drawAudioWave() {
         const rms = Math.sqrt(sumSq / bufferLength);
         const volumePercent = Math.min(Math.round(rms * 400), 100);
         audioDbLabel.textContent = `Volume: ${volumePercent}%`;
+
+        // Sound-trigger camera activation logic (>30%)
+        const chkAutoCamera = document.getElementById('chk-sound-auto-camera');
+        if (chkAutoCamera && chkAutoCamera.checked && volumePercent > 30 && !isCameraOn) {
+            console.log(`[Auto-Trigger] Microphone volume reached ${volumePercent}%, triggering camera activation.`);
+            toggleCamera();
+        }
     }
     
     draw();
@@ -394,12 +429,20 @@ function initBackendConnection() {
     loadDirectoryList('');
     checkSchedulerConfig();
     loadWisdomStorage();
+    loadOllamaConfig();
     
     // Set interval to poll CPU load every 5 seconds
     if (window.systemStatsInterval) {
         clearInterval(window.systemStatsInterval);
     }
     window.systemStatsInterval = setInterval(updateSystemStats, 5000);
+
+    // Initial load and periodic polling of sensory history (every 4 seconds)
+    loadSensoryHistory();
+    if (window.sensoryHistoryInterval) {
+        clearInterval(window.sensoryHistoryInterval);
+    }
+    window.sensoryHistoryInterval = setInterval(loadSensoryHistory, 4000);
 }
 
 async function checkSchedulerConfig() {
@@ -501,8 +544,15 @@ async function loadDirectoryList(path) {
             const li = document.createElement('li');
             li.className = `file-item ${item.is_dir ? 'directory' : 'file'}`;
             
-            const iconName = item.is_dir ? 'folder' : 'file';
-            li.innerHTML = `<i data-lucide="${iconName}" style="width: 14px; height: 14px;"></i> <span>${item.name}</span>`;
+            const icon = document.createElement('i');
+            icon.setAttribute('data-lucide', item.is_dir ? 'folder' : 'file');
+            icon.style.width = '14px';
+            icon.style.height = '14px';
+            li.appendChild(icon);
+            
+            const span = document.createElement('span');
+            span.textContent = " " + item.name;
+            li.appendChild(span);
             
             li.addEventListener('click', () => {
                 if (item.is_dir) {
@@ -577,16 +627,31 @@ async function triggerWebSearch() {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'search-item';
             
-            const sourceBadge = `<span class="search-source-badge">${result.source}</span>`;
+            const link = document.createElement('a');
+            link.href = result.url;
+            link.target = '_blank';
+            link.className = 'search-title-link';
             
-            itemDiv.innerHTML = `
-                <a href="${result.url}" target="_blank" class="search-title-link">
-                    <i data-lucide="external-link" style="width: 12px; height: 12px;"></i>
-                    <span>${result.title}</span>
-                </a>
-                ${sourceBadge}
-                <div class="search-snippet">${result.snippet}</div>
-            `;
+            const extIcon = document.createElement('i');
+            extIcon.setAttribute('data-lucide', 'external-link');
+            extIcon.style.width = '12px';
+            extIcon.style.height = '12px';
+            link.appendChild(extIcon);
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = " " + result.title;
+            link.appendChild(titleSpan);
+            itemDiv.appendChild(link);
+            
+            const badge = document.createElement('span');
+            badge.className = 'search-source-badge';
+            badge.textContent = result.source;
+            itemDiv.appendChild(badge);
+            
+            const snippetDiv = document.createElement('div');
+            snippetDiv.className = 'search-snippet';
+            snippetDiv.textContent = result.snippet;
+            itemDiv.appendChild(snippetDiv);
             
             // Add click event to feed this web snippet to chat input or open local file
             itemDiv.addEventListener('click', (e) => {
@@ -605,7 +670,12 @@ async function triggerWebSearch() {
         
         lucide.createIcons();
     } catch (err) {
-        webSearchResults.innerHTML = `<div class="search-placeholder-text" style="color: #C2635B;">검색 도중 에러가 발생했습니다: ${err.message}</div>`;
+        const errDiv = document.createElement('div');
+        errDiv.className = 'search-placeholder-text';
+        errDiv.style.color = '#C2635B';
+        errDiv.textContent = `검색 도중 에러가 발생했습니다: ${err.message}`;
+        webSearchResults.innerHTML = '';
+        webSearchResults.appendChild(errDiv);
         console.error(err);
     } finally {
         if (res && res.body && !res.bodyUsed) {
@@ -696,21 +766,81 @@ function sendMessage() {
     if (window.araBrain) {
         window.araBrain.stimulate(2.5); // heavy pulse animation
         
-        // Simulate response processing delay for a natural rhythm (500 - 1500ms)
-        setTimeout(() => {
-            const reply = window.araBrain.generateReply(text);
+        // Check if Ollama is enabled and online
+        if (window.ollamaEnabled && window.ollamaOnline) {
+            const activePersona = document.querySelector('.btn-persona.active')?.getAttribute('data-persona') || 'friend';
             
-            // AI response bubble
-            appendMessage('ai', reply);
+            // Collect message history from current chat window
+            const history = [];
+            const msgBubbles = document.querySelectorAll('#chat-messages-container .chat-message');
+            msgBubbles.forEach(msg => {
+                const bubble = msg.querySelector('.message-bubble');
+                if (bubble) {
+                    const role = msg.classList.contains('user') ? 'user' : (msg.classList.contains('ai') ? 'ai' : 'system');
+                    if (role !== 'system') {
+                        history.push({
+                            role: role,
+                            content: bubble.innerText
+                        });
+                    }
+                }
+            });
             
-            // Speak reply if not muted
-            speakText(reply);
+            // Query server-side Ollama chat endpoint
+            fetch(`${API_BASE}/api/brain/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: text,
+                    persona: activePersona,
+                    history: history
+                })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("HTTP error " + res.status);
+                return res.json();
+            })
+            .then(data => {
+                if (data.status === 'success' && data.reply) {
+                    appendMessage('ai', data.reply);
+                    speakText(data.reply);
+                } else {
+                    throw new Error(data.message || "Failed to get reply");
+                }
+                
+                // Reset state
+                interactionStatusText.textContent = "아라가 이야기를 기다리는 중...";
+                const currentMood = window.araBrain.moodState;
+                updateMoodChip(currentMood, getMoodKorean(currentMood));
+            })
+            .catch(err => {
+                console.warn("Ollama chat query failed, falling back to local brain:", err);
+                const reply = window.araBrain.generateReply(text);
+                appendMessage('ai', `[로컬 AI 연결 실패 - 규칙 기반 답변 대체]\n\n${reply}`);
+                speakText(reply);
+                
+                interactionStatusText.textContent = "아라가 이야기를 기다리는 중...";
+                const currentMood = window.araBrain.moodState;
+                updateMoodChip(currentMood, getMoodKorean(currentMood));
+            });
             
-            // Reset state
-            interactionStatusText.textContent = "아라가 이야기를 기다리는 중...";
-            const currentMood = window.araBrain.moodState;
-            updateMoodChip(currentMood, getMoodKorean(currentMood));
-        }, 800 + Math.random() * 800);
+        } else {
+            // Standard rule-based fallback
+            setTimeout(() => {
+                const reply = window.araBrain.generateReply(text);
+                
+                // AI response bubble
+                appendMessage('ai', reply);
+                
+                // Speak reply if not muted
+                speakText(reply);
+                
+                // Reset state
+                interactionStatusText.textContent = "아라가 이야기를 기다리는 중...";
+                const currentMood = window.araBrain.moodState;
+                updateMoodChip(currentMood, getMoodKorean(currentMood));
+            }, 800 + Math.random() * 800);
+        }
     } else {
         // Fallback if brain logic not loaded
         setTimeout(() => {
@@ -944,6 +1074,198 @@ function setupEventListeners() {
     if (btnSubmitAdvisorUrls) {
         btnSubmitAdvisorUrls.addEventListener('click', submitSearchAdvisorUrls);
     }
+
+    // Ollama Local AI Event Listeners
+    const btnTestOllama = document.getElementById('btn-test-ollama');
+    if (btnTestOllama) {
+        btnTestOllama.addEventListener('click', () => testOllamaConnection(true));
+    }
+
+    const btnSaveOllamaConfig = document.getElementById('btn-save-ollama-config');
+    if (btnSaveOllamaConfig) {
+        btnSaveOllamaConfig.addEventListener('click', saveOllamaConfig);
+    }
+
+    const ollamaModelSelect = document.getElementById('ollama-model-select');
+    if (ollamaModelSelect) {
+        ollamaModelSelect.addEventListener('change', (e) => {
+            const customInput = document.getElementById('ollama-model-custom');
+            if (e.target.value === 'custom') {
+                customInput.style.display = 'inline-block';
+                customInput.focus();
+            } else {
+                customInput.style.display = 'none';
+            }
+        });
+    }
+
+    const btnCopyInstallCmd = document.getElementById('btn-copy-install-cmd');
+    if (btnCopyInstallCmd) {
+        btnCopyInstallCmd.addEventListener('click', () => {
+            const code = document.getElementById('install-cmd-code').innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                alert('Ollama 설치 명령어가 클립보드에 복사되었습니다.');
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
+        });
+    }
+
+    const btnCopyRunCmd = document.getElementById('btn-copy-run-cmd');
+    if (btnCopyRunCmd) {
+        btnCopyRunCmd.addEventListener('click', () => {
+            const code = document.getElementById('run-cmd-code').innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                alert('모델 구동 명령어가 클립보드에 복사되었습니다.');
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
+        });
+    }
+
+    // Maintenance & Self-Healing Event Listeners
+    const btnRefreshDiagnose = document.getElementById('btn-refresh-diagnose');
+    if (btnRefreshDiagnose) {
+        btnRefreshDiagnose.addEventListener('click', refreshMaintenanceStatus);
+    }
+
+    const btnTriggerRepair = document.getElementById('btn-trigger-repair');
+    if (btnTriggerRepair) {
+        btnTriggerRepair.addEventListener('click', triggerMaintenanceRepair);
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Ollama Local AI Bridge & Configurations
+   -------------------------------------------------------------------------- */
+async function loadOllamaConfig() {
+    try {
+        const res = await fetch(`${API_BASE}/api/ollama/config`);
+        if (!res.ok) return;
+        const config = await res.json();
+        
+        document.getElementById('ollama-url-input').value = config.url || 'http://localhost:11434';
+        document.getElementById('ollama-enable-checkbox').checked = config.enabled || false;
+        
+        window.ollamaEnabled = config.enabled || false;
+        
+        await testOllamaConnection(false, config.model);
+    } catch (err) {
+        console.warn("Failed to load Ollama config:", err);
+    }
+}
+
+async function saveOllamaConfig() {
+    const url = document.getElementById('ollama-url-input').value.trim();
+    const modelSelect = document.getElementById('ollama-model-select');
+    const enabled = document.getElementById('ollama-enable-checkbox').checked;
+    
+    let model = modelSelect.value;
+    if (model === 'custom') {
+        model = document.getElementById('ollama-model-custom').value.trim();
+    }
+    
+    if (!url) {
+        alert('Ollama URL을 입력해 주세요.');
+        return;
+    }
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/ollama/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled, url, model })
+        });
+        
+        if (res.ok) {
+            window.ollamaEnabled = enabled;
+            alert('Ollama 연동 설정이 성공적으로 저장되었습니다.');
+            testOllamaConnection(false);
+        } else {
+            alert('설정 저장에 실패했습니다.');
+        }
+    } catch (err) {
+        console.error("Save Ollama config failed:", err);
+        alert('설정 저장 중 에러가 발생했습니다.');
+    }
+}
+
+async function testOllamaConnection(verbose = false, selectedModel = null) {
+    const statusDot = document.getElementById('ollama-status-dot');
+    const statusText = document.getElementById('ollama-status-text');
+    const modelSelect = document.getElementById('ollama-model-select');
+    
+    statusText.textContent = "연결 확인 중...";
+    statusDot.className = "status-dot offline";
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/ollama/status`);
+        if (!res.ok) throw new Error("Status check failed");
+        
+        const data = await res.json();
+        if (data.online) {
+            statusDot.className = "status-dot online";
+            statusText.textContent = "온라인 (Ollama 구동 중)";
+            window.ollamaOnline = true;
+            
+            // Clear select and bind models
+            modelSelect.innerHTML = '';
+            if (data.models && data.models.length > 0) {
+                data.models.forEach(model => {
+                    const opt = document.createElement('option');
+                    opt.value = model;
+                    opt.textContent = model;
+                    modelSelect.appendChild(opt);
+                });
+            } else {
+                const opt = document.createElement('option');
+                opt.value = 'gemma2:2b';
+                opt.textContent = 'gemma2:2b (모델 스캔 실패, 수동 입력 필요)';
+                modelSelect.appendChild(opt);
+            }
+            
+            const customOpt = document.createElement('option');
+            customOpt.value = 'custom';
+            customOpt.textContent = '직접 입력...';
+            modelSelect.appendChild(customOpt);
+            
+            if (selectedModel) {
+                let found = false;
+                for (let i = 0; i < modelSelect.options.length; i++) {
+                    if (modelSelect.options.item(i).value === selectedModel) {
+                        modelSelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    modelSelect.value = 'custom';
+                    const customInput = document.getElementById('ollama-model-custom');
+                    customInput.style.display = 'inline-block';
+                    customInput.value = selectedModel;
+                }
+            }
+            
+            if (verbose) {
+                alert(`Ollama 서버에 성공적으로 연동되었습니다!\n발견된 모델 수: ${data.models.length}개`);
+            }
+        } else {
+            statusDot.className = "status-dot offline";
+            statusText.textContent = "오프라인";
+            window.ollamaOnline = false;
+            if (verbose) {
+                alert("Ollama 서버에 연결할 수 없습니다. 서비스가 켜져 있는지 확인하세요.\n(기본 URL: http://localhost:11434)");
+            }
+        }
+    } catch (err) {
+        console.warn("Ollama status check failed:", err);
+        statusDot.className = "status-dot offline";
+        statusText.textContent = "오프라인 (서버 에러)";
+        window.ollamaOnline = false;
+        if (verbose) {
+            alert("연동 테스트 실패: ARA 백엔드와의 통신이 원활하지 않거나 Ollama 포트가 오프라인입니다.");
+        }
+    }
 }
 
 async function triggerDailySyncManual() {
@@ -1090,6 +1412,15 @@ function displayUserProfile(user) {
     }
 }
 
+function showFeedError(errMessage) {
+    const errDiv = document.createElement('div');
+    errDiv.className = 'search-placeholder-text';
+    errDiv.style.color = '#C2635B';
+    errDiv.textContent = `피드를 불러오지 못했습니다: ${errMessage}`;
+    webSearchResults.innerHTML = '';
+    webSearchResults.appendChild(errDiv);
+}
+
 async function loadOpenCultureFeed() {
     webSearchResults.innerHTML = `<div class="search-placeholder-text">오픈컬처 학술 피드 불러오는 중...</div>`;
     try {
@@ -1099,7 +1430,7 @@ async function loadOpenCultureFeed() {
         renderFeedResults(data.results, "Open Culture");
         loadWisdomStorage();
     } catch (err) {
-        webSearchResults.innerHTML = `<div class="search-placeholder-text" style="color: #C2635B;">피드를 불러오지 못했습니다: ${err.message}</div>`;
+        showFeedError(err.message);
     }
 }
 
@@ -1112,7 +1443,7 @@ async function loadPinterestFeed() {
         renderFeedResults(data.results, "Pinterest");
         loadWisdomStorage();
     } catch (err) {
-        webSearchResults.innerHTML = `<div class="search-placeholder-text" style="color: #C2635B;">피드를 불러오지 못했습니다: ${err.message}</div>`;
+        showFeedError(err.message);
     }
 }
 
@@ -1125,7 +1456,7 @@ async function loadNaverBlogFeed() {
         renderFeedResults(data.results, "Naver Blog");
         loadWisdomStorage();
     } catch (err) {
-        webSearchResults.innerHTML = `<div class="search-placeholder-text" style="color: #C2635B;">피드를 불러오지 못했습니다: ${err.message}</div>`;
+        showFeedError(err.message);
     }
 }
 
@@ -1138,7 +1469,7 @@ async function loadYouTubeFeed() {
         renderFeedResults(data.results, "YouTube");
         loadWisdomStorage();
     } catch (err) {
-        webSearchResults.innerHTML = `<div class="search-placeholder-text" style="color: #C2635B;">피드를 불러오지 못했습니다: ${err.message}</div>`;
+        showFeedError(err.message);
         return null;
     }
 }
@@ -1182,11 +1513,23 @@ function renderWisdomStorage(wisdom) {
         const dateStr = item.scraped_at ? item.scraped_at.split(' ')[0] : '';
         const sourceName = item.source ? item.source.split(' ')[0] : '기타';
         
-        div.innerHTML = `
-            <span class="wisdom-source">[${sourceName}]</span>
-            <a href="${item.link}" target="_blank" class="wisdom-title" title="${item.title}">${item.title}</a>
-            <span class="wisdom-time">${dateStr}</span>
-        `;
+        const sourceSpan = document.createElement('span');
+        sourceSpan.className = 'wisdom-source';
+        sourceSpan.textContent = `[${sourceName}]`;
+        div.appendChild(sourceSpan);
+        
+        const link = document.createElement('a');
+        link.href = item.link;
+        link.target = '_blank';
+        link.className = 'wisdom-title';
+        link.title = item.title;
+        link.textContent = item.title;
+        div.appendChild(link);
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'wisdom-time';
+        timeSpan.textContent = dateStr;
+        div.appendChild(timeSpan);
         
         listContainer.appendChild(div);
     });
@@ -1201,15 +1544,33 @@ function renderFeedResults(items, source) {
     items.forEach(item => {
         const itemDiv = document.createElement('div');
         itemDiv.className = 'search-item';
-        const sourceBadge = `<span class="search-source-badge">${source}</span>`;
-        itemDiv.innerHTML = `
-            <a href="${item.link}" target="_blank" class="search-title-link">
-                <i data-lucide="external-link" style="width: 12px; height: 12px;"></i>
-                <span>${item.title}</span>
-            </a>
-            ${sourceBadge}
-            <div class="search-snippet">${item.description}</div>
-        `;
+        
+        const link = document.createElement('a');
+        link.href = item.link;
+        link.target = '_blank';
+        link.className = 'search-title-link';
+        
+        const extIcon = document.createElement('i');
+        extIcon.setAttribute('data-lucide', 'external-link');
+        extIcon.style.width = '12px';
+        extIcon.style.height = '12px';
+        link.appendChild(extIcon);
+        
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = " " + item.title;
+        link.appendChild(titleSpan);
+        itemDiv.appendChild(link);
+        
+        const badge = document.createElement('span');
+        badge.className = 'search-source-badge';
+        badge.textContent = source;
+        itemDiv.appendChild(badge);
+        
+        const snippetDiv = document.createElement('div');
+        snippetDiv.className = 'search-snippet';
+        snippetDiv.textContent = item.description;
+        itemDiv.appendChild(snippetDiv);
+        
         itemDiv.addEventListener('click', (e) => {
             if (e.target.closest('.search-title-link')) return;
             chatTextInput.value = `[${source} 피드 공유] 제목: "${item.title}"\n요약: "${item.description}"\n위 내용을 토대로 인사이트를 제시해줘.`;
@@ -1356,10 +1717,21 @@ function getCrawlPayloadUrls(actionType) {
 
 function displayAdvisorLog(text, isError = false) {
     const consoleLog = document.getElementById('advisor-console-log');
+    if (!consoleLog) return;
     const timestamp = new Date().toLocaleTimeString();
-    const color = isError ? '#FF8F8F' : '#A9C2B1';
     
-    consoleLog.innerHTML = `<span style="color: #888;">[${timestamp}]</span> <span style="color: ${color};">${text}</span>`;
+    consoleLog.innerHTML = '';
+    
+    const timeSpan = document.createElement('span');
+    timeSpan.style.color = '#888';
+    timeSpan.textContent = `[${timestamp}] `;
+    consoleLog.appendChild(timeSpan);
+    
+    const textSpan = document.createElement('span');
+    textSpan.style.color = isError ? '#FF8F8F' : '#A9C2B1';
+    textSpan.textContent = text;
+    consoleLog.appendChild(textSpan);
+    
     consoleLog.scrollTop = consoleLog.scrollHeight;
 }
 
@@ -1439,6 +1811,241 @@ async function submitSearchAdvisorUrls() {
     }
 }
 
+/* --------------------------------------------------------------------------
+   Autonomous Maintenance & Self-Healing Connection Bindings
+   -------------------------------------------------------------------------- */
+let maintenancePollingTimer = null;
+let isRepairRunning = false;
+
+async function initMaintenanceConnection() {
+    // 1. Initial status fetch
+    await refreshMaintenanceStatus();
+    
+    // 2. Start polling status every 15 seconds
+    if (maintenancePollingTimer) clearInterval(maintenancePollingTimer);
+    maintenancePollingTimer = setInterval(refreshMaintenanceStatus, 15000);
+}
+
+async function refreshMaintenanceStatus() {
+    try {
+        const res = await fetch(`${API_BASE}/api/maintenance/status`);
+        if (!res.ok) throw new Error("Failed to fetch maintenance status");
+        const data = await res.json();
+        
+        renderMaintenanceStatus(data);
+    } catch (err) {
+        console.error("Failed to load maintenance status:", err);
+    }
+}
+
+function renderMaintenanceStatus(data) {
+    const statusDot = document.getElementById('maintenance-status-dot');
+    const statusText = document.getElementById('maintenance-status-text');
+    const syntaxBadge = document.getElementById('syntax-status-badge');
+    const integrityBadge = document.getElementById('integrity-status-badge');
+    const lastDiagnoseTime = document.getElementById('last-diagnose-time');
+    const consoleLog = document.getElementById('maintenance-console-log');
+    const historyList = document.getElementById('maintenance-history-list');
+    
+    if (!statusDot || !statusText || !syntaxBadge || !integrityBadge || !lastDiagnoseTime || !consoleLog || !historyList) return;
+    if (!data || !data.report) return;
+    
+    const report = data.report;
+    const history = data.history || [];
+    
+    // 1. Overall health status
+    if (report.health === 'healthy') {
+        statusDot.className = 'status-dot online';
+        statusDot.style.backgroundColor = '';
+        statusText.textContent = '건강함 (Healthy)';
+        statusText.style.color = 'var(--accent-green)';
+    } else {
+        statusDot.className = 'status-dot degraded';
+        statusDot.style.backgroundColor = '#C2635B';
+        statusText.textContent = '조치 권장 (Degraded)';
+        statusText.style.color = '#C2635B';
+    }
+    
+    // 2. Badges
+    // Syntax Check
+    if (report.syntax_errors && report.syntax_errors.length === 0) {
+        syntaxBadge.textContent = '정상';
+        syntaxBadge.style.backgroundColor = '#3D664E';
+    } else {
+        syntaxBadge.textContent = `오류 (${report.syntax_errors.length}건)`;
+        syntaxBadge.style.backgroundColor = '#C2635B';
+    }
+    
+    // Integrity Check
+    if (report.integrity && report.integrity.status === 'success') {
+        integrityBadge.textContent = '정상';
+        integrityBadge.style.backgroundColor = '#3D664E';
+    } else {
+        integrityBadge.textContent = '오류';
+        integrityBadge.style.backgroundColor = '#C2635B';
+    }
+    
+    // Time
+    if (report.timestamp) {
+        lastDiagnoseTime.textContent = report.timestamp;
+    }
+    
+    // 3. Log Output
+    let logLines = `=== 자가 진단 최종 분석 리포트 (${report.timestamp || 'N/A'}) ===\n`;
+    logLines += `전체 건강도: ${report.health.toUpperCase()}\n`;
+    logLines += `[무결성 검사 로그]\n${(report.integrity && report.integrity.log) ? report.integrity.log.trim() : '로그 없음'}\n\n`;
+    
+    if (report.syntax_errors && report.syntax_errors.length > 0) {
+        logLines += `[구문 에러 검출 목록]\n`;
+        report.syntax_errors.forEach((err, index) => {
+            logLines += `${index + 1}. 파일: ${err.file}\n   위치: ${err.line}라인\n   내용: ${err.error}\n`;
+        });
+    } else {
+        logLines += `[구문 검사 결과]\n모든 파이썬 소스코드의 컴파일 상태가 완벽합니다 (구문 오류 없음).\n`;
+    }
+    
+    // If not running a repair, show the latest diagnostics
+    if (!isRepairRunning) {
+        consoleLog.textContent = logLines;
+    }
+    
+    // 4. Render History
+    historyList.innerHTML = '';
+    if (history.length === 0) {
+        historyList.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-style: italic; margin-top: 15px;">이력 데이터 대기 중...</div>`;
+    } else {
+        history.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'maintenance-history-item';
+            
+            const isSuccess = item.status === 'success';
+            const badgeClass = isSuccess ? 'maintenance-badge-success' : 'maintenance-badge-rolled-back';
+            const statusLabel = isSuccess ? '완료' : '롤백됨';
+            const elapsed = item.elapsed_seconds ? `${item.elapsed_seconds}초 소요` : '';
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'maintenance-history-header';
+            
+            const fileSpan = document.createElement('span');
+            fileSpan.style.color = 'var(--accent-green)';
+            fileSpan.style.fontSize = '11px';
+            fileSpan.style.fontWeight = 'bold';
+            fileSpan.textContent = item.target_file || '전체 복구';
+            headerDiv.appendChild(fileSpan);
+            
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = `maintenance-history-badge ${badgeClass}`;
+            badgeSpan.textContent = statusLabel;
+            headerDiv.appendChild(badgeSpan);
+            
+            div.appendChild(headerDiv);
+            
+            const detailsDiv = document.createElement('div');
+            detailsDiv.className = 'maintenance-history-details';
+            detailsDiv.style.margin = '4px 0';
+            detailsDiv.textContent = '피드백: ';
+            const strongFeedback = document.createElement('strong');
+            strongFeedback.textContent = item.feedback;
+            detailsDiv.appendChild(strongFeedback);
+            div.appendChild(detailsDiv);
+            
+            if (item.reason) {
+                const reasonDiv = document.createElement('div');
+                reasonDiv.style.color = '#A34841';
+                reasonDiv.style.fontSize = '10.5px';
+                reasonDiv.style.marginBottom = '4px';
+                reasonDiv.style.fontWeight = '500';
+                reasonDiv.textContent = `※ 사유: ${item.reason}`;
+                div.appendChild(reasonDiv);
+            }
+            
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'maintenance-history-meta';
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'maintenance-history-time';
+            timeSpan.textContent = item.timestamp;
+            metaDiv.appendChild(timeSpan);
+            
+            const elapsedSpan = document.createElement('span');
+            elapsedSpan.textContent = elapsed;
+            metaDiv.appendChild(elapsedSpan);
+            
+            div.appendChild(metaDiv);
+            
+            historyList.appendChild(div);
+        });
+    }
+}
+
+async function triggerMaintenanceRepair() {
+    const feedbackInput = document.getElementById('repair-feedback-input');
+    const feedback = feedbackInput ? feedbackInput.value.trim() : "";
+    const btnRepair = document.getElementById('btn-trigger-repair');
+    const runningIndicator = document.getElementById('repair-running-indicator');
+    const consoleLog = document.getElementById('maintenance-console-log');
+    
+    if (!feedback) {
+        alert("수정을 위한 피드백 내용을 입력해 주십시오.");
+        return;
+    }
+    
+    if (!confirm("백그라운드에서 AI 자율 수정 및 빌드/무결성 검증을 실행하시겠습니까?")) {
+        return;
+    }
+    
+    isRepairRunning = true;
+    if (btnRepair) btnRepair.disabled = true;
+    if (feedbackInput) feedbackInput.disabled = true;
+    if (runningIndicator) runningIndicator.style.display = 'inline';
+    
+    const timestamp = new Date().toLocaleTimeString();
+    if (consoleLog) {
+        consoleLog.textContent = `[${timestamp}] AI 자율 복구 스레드 가동...\n`;
+        consoleLog.textContent += `전달된 피드백: "${feedback}"\n`;
+        consoleLog.textContent += `백업 생성 및 로컬 Ollama AI 패치 생성 요청을 대기 중입니다.\n`;
+        consoleLog.textContent += `이 과정은 약 10~30초 정도 소요될 수 있습니다. 대시보드가 정상 유지되는 동안 백그라운드 스레드에서 검증 및 컴파일 검사를 계속 진행합니다...\n`;
+    }
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/maintenance/repair`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ feedback })
+        });
+        
+        if (!res.ok) throw new Error(`서버 에러 (HTTP ${res.status})`);
+        
+        const data = await res.json();
+        if (consoleLog) {
+            consoleLog.textContent += `\n[서버 응답] ${data.message}\n`;
+        }
+        showToast(data.message, 'success');
+        
+        if (feedbackInput) feedbackInput.value = '';
+        
+        // Immediately fetch status update to show history/changes
+        setTimeout(async () => {
+            await refreshMaintenanceStatus();
+            isRepairRunning = false;
+            if (btnRepair) btnRepair.disabled = false;
+            if (feedbackInput) feedbackInput.disabled = false;
+            if (runningIndicator) runningIndicator.style.display = 'none';
+        }, 5000);
+        
+    } catch (err) {
+        console.error("Failed to run repair:", err);
+        if (consoleLog) {
+            consoleLog.textContent += `\n[오류 발생] ${err.message}\n`;
+        }
+        showToast(`복구 요청 실패: ${err.message}`, 'error');
+        isRepairRunning = false;
+        if (btnRepair) btnRepair.disabled = false;
+        if (feedbackInput) feedbackInput.disabled = false;
+        if (runningIndicator) runningIndicator.style.display = 'none';
+    }
+}
+
 /* =================================================================---------
    OmniConvert Core Engine Modules & Integration
    ================================================================---------- */
@@ -1494,11 +2101,11 @@ function calculateTfidfSummarizer(text, ratioPercent) {
     });
     
     // Word/Term Frequencies in Document
-    const wordDocCounts = {};
+    const wordDocCounts = new Map();
     sentenceTokens.forEach(tokens => {
         const uniqueInSentence = new Set(tokens);
         uniqueInSentence.forEach(w => {
-            wordDocCounts[w] = (wordDocCounts[w] || 0) + 1;
+            wordDocCounts.set(w, (wordDocCounts.get(w) || 0) + 1);
         });
     });
     
@@ -1506,18 +2113,18 @@ function calculateTfidfSummarizer(text, ratioPercent) {
     
     // Sentence Scoring: TF-IDF based sentence ranking
     const scoredSentences = sentences.map((sentence, idx) => {
-        const tokens = sentenceTokens[idx];
+        const tokens = sentenceTokens.at(idx);
         if (tokens.length === 0) return { sentence, index: idx, score: 0 };
         
         let score = 0;
-        const tokenFreqs = {};
+        const tokenFreqs = new Map();
         tokens.forEach(w => {
-            tokenFreqs[w] = (tokenFreqs[w] || 0) + 1;
+            tokenFreqs.set(w, (tokenFreqs.get(w) || 0) + 1);
         });
         
         tokens.forEach(w => {
-            const tf = tokenFreqs[w] / tokens.length;
-            const idf = Math.log(1 + (N / (wordDocCounts[w] || 1)));
+            const tf = tokenFreqs.get(w) / tokens.length;
+            const idf = Math.log(1 + (N / (wordDocCounts.get(w) || 1)));
             score += tf * idf;
         });
         
@@ -1798,10 +2405,14 @@ function showToast(message, type = 'info') {
     if (type === 'success') iconName = 'check-circle';
     if (type === 'error') iconName = 'alert-triangle';
     
-    toast.innerHTML = `
-        <i data-lucide="${iconName}"></i>
-        <span>${message}</span>
-    `;
+    toast.innerHTML = '';
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', iconName);
+    toast.appendChild(icon);
+    
+    const span = document.createElement('span');
+    span.textContent = message;
+    toast.appendChild(span);
     
     container.appendChild(toast);
     if (window.lucide) window.lucide.createIcons();
@@ -1864,4 +2475,242 @@ btnRunDiagnostics.addEventListener('click', async () => {
         showToast('일부 검증 테스트 항목이 실패했습니다.', 'error');
     }
 });
+
+/* --------------------------------------------------------------------------
+   Sense Core: Real-Time Environment & User Recognition
+   -------------------------------------------------------------------------- */
+async function loadCocoSsdModel() {
+    if (cocoModel || isModelLoading) return cocoModel;
+    isModelLoading = true;
+    const visionStatus = document.querySelector('.vision-status');
+    if (visionStatus) {
+        visionStatus.textContent = "TF.js 인지 모델 로드 중...";
+    }
+    try {
+        cocoModel = await cocoSsd.load();
+        console.log("COCO-SSD model loaded successfully.");
+        if (visionStatus && isCameraOn) {
+            visionStatus.textContent = "시각 데이터 및 TF.js 로드 완료";
+        }
+    } catch (err) {
+        console.error("Failed to load COCO-SSD model:", err);
+        if (visionStatus) {
+            visionStatus.textContent = "인지 모델 로드 실패";
+        }
+    } finally {
+        isModelLoading = false;
+    }
+    return cocoModel;
+}
+
+function startDetectionLoop() {
+    if (!isCameraOn || !webcamFeed) return;
+    
+    if (visionDetectionTimeout) clearTimeout(visionDetectionTimeout);
+    
+    visionDetectionTimeout = setTimeout(async () => {
+        if (!isCameraOn) return;
+        
+        try {
+            const model = await loadCocoSsdModel();
+            if (model && webcamFeed.readyState === 4) { // HAVE_ENOUGH_DATA
+                const predictions = await model.detect(webcamFeed);
+                drawVisionBoxes(predictions);
+                processSensoryData(predictions);
+            }
+        } catch (err) {
+            console.error("Detection error:", err);
+        }
+        
+        startDetectionLoop();
+    }, 2000);
+}
+
+function drawVisionBoxes(predictions) {
+    const canvas = document.getElementById('vision-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    if (canvas.width !== webcamFeed.clientWidth || canvas.height !== webcamFeed.clientHeight) {
+        canvas.width = webcamFeed.clientWidth;
+        canvas.height = webcamFeed.clientHeight;
+    }
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    predictions.forEach(prediction => {
+        const videoWidth = webcamFeed.videoWidth || 320;
+        const videoHeight = webcamFeed.videoHeight || 240;
+        
+        const scaleX = canvas.width / videoWidth;
+        const scaleY = canvas.height / videoHeight;
+        
+        const [x, y, width, height] = prediction.bbox;
+        const rx = x * scaleX;
+        const ry = y * scaleY;
+        const rw = width * scaleX;
+        const rh = height * scaleY;
+        
+        ctx.strokeStyle = '#3D664E';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rx, ry, rw, rh);
+        
+        ctx.fillStyle = 'rgba(61, 102, 78, 0.15)';
+        ctx.fillRect(rx, ry, rw, rh);
+        
+        const label = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+        ctx.fillStyle = '#3D664E';
+        ctx.font = '10px "Nunito", sans-serif';
+        ctx.textBaseline = 'top';
+        const textWidth = ctx.measureText(label).width;
+        
+        ctx.fillRect(rx, ry - 14, textWidth + 10, 14);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(label, rx + 5, ry - 12);
+    });
+}
+
+function getActiveUserNickname() {
+    try {
+        const savedUser = localStorage.getItem('ara_user');
+        if (savedUser) {
+            const parsed = JSON.parse(savedUser);
+            if (parsed && parsed.nickname) {
+                return parsed.nickname;
+            }
+        }
+    } catch (e) {}
+    return "사용자";
+}
+
+async function processSensoryData(predictions) {
+    const personDetected = predictions.some(p => p.class === 'person');
+    const nickname = getActiveUserNickname();
+    const personLabel = personDetected ? `감지됨 (${nickname})` : "없음";
+    
+    let hasIndoorObj = false;
+    let hasOutdoorObj = false;
+    const objectList = [];
+    
+    predictions.forEach(p => {
+        const c = p.class.toLowerCase();
+        objectList.push(p.class);
+        if (['chair', 'tv', 'bed', 'dining table', 'couch', 'laptop', 'mouse', 'keyboard', 'book', 'bottle', 'cup', 'vase', 'refrigerator', 'microwave', 'sink'].includes(c)) {
+            hasIndoorObj = true;
+        }
+        if (['car', 'bicycle', 'motorcycle', 'bus', 'truck', 'traffic light', 'stop sign'].includes(c)) {
+            hasOutdoorObj = true;
+        }
+    });
+    
+    let location = "실내 (집안)";
+    if (hasOutdoorObj && !hasIndoorObj) {
+        location = "실외 (집밖)";
+    }
+    
+    // Update local UI
+    const locVal = document.getElementById('rec-location-val');
+    const perVal = document.getElementById('rec-person-val');
+    const objList = document.getElementById('rec-objects-list');
+    
+    if (locVal) locVal.textContent = location;
+    if (perVal) perVal.textContent = personLabel;
+    if (objList) {
+        objList.textContent = objectList.length > 0 ? objectList.join(', ') : '--';
+    }
+    
+    // Write sensory log to server if state changed or 15s elapsed
+    const stateStr = `${location}|${personLabel}|${objectList.join(',')}`;
+    const currTime = Date.now();
+    
+    if (stateStr !== `${lastSensoryState.location}|${lastSensoryState.person}|${lastSensoryState.objects}` || (currTime - lastSensoryLogTime > 15000)) {
+        lastSensoryState = { location, person: personLabel, objects: objectList.join(',') };
+        lastSensoryLogTime = currTime;
+        
+        try {
+            await fetch(`${API_BASE}/api/sensory/log`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    location,
+                    person: personLabel,
+                    objects: objectList
+                })
+            });
+        } catch (e) {
+            console.warn("Failed to write sensory log to server:", e);
+        }
+    }
+}
+
+async function loadSensoryHistory() {
+    const listEl = document.getElementById('sensory-history-list');
+    if (!listEl) return;
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/sensory/history`);
+        if (!res.ok) throw new Error("History fetch failed");
+        
+        const logs = await res.json();
+        listEl.innerHTML = '';
+        
+        if (logs.length === 0) {
+            listEl.innerHTML = `<div style="text-align: center; color: var(--text-secondary); font-style: italic; margin-top: 25px;">감지 이력이 없습니다.</div>`;
+            return;
+        }
+        
+        // Sync UI displays with the latest log if it's fresh (within 8 seconds)
+        // (This allows local python vision utility updates to reflect in the UI too)
+        const latest = logs[0];
+        const logTime = new Date(latest.timestamp).getTime();
+        const nowTime = Date.now();
+        
+        if (nowTime - logTime < 8000) {
+            const locVal = document.getElementById('rec-location-val');
+            const perVal = document.getElementById('rec-person-val');
+            const objList = document.getElementById('rec-objects-list');
+            
+            if (locVal) locVal.textContent = latest.location;
+            if (perVal) perVal.textContent = latest.person;
+            if (objList) {
+                objList.textContent = latest.objects && latest.objects.length > 0 ? (Array.isArray(latest.objects) ? latest.objects.join(', ') : latest.objects) : '--';
+            }
+        }
+        
+        logs.forEach(log => {
+            const div = document.createElement('div');
+            div.style.padding = '3px 0';
+            div.style.borderBottom = '1px dashed rgba(255,255,255,0.08)';
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.style.color = '#86A890';
+            timeSpan.textContent = `[${log.timestamp.split(' ')[1]}] `;
+            div.appendChild(timeSpan);
+            
+            const locSpan = document.createElement('span');
+            locSpan.style.color = '#EAE5D9';
+            locSpan.textContent = `${log.location} | `;
+            div.appendChild(locSpan);
+            
+            const personSpan = document.createElement('span');
+            personSpan.style.color = log.person.includes('감지됨') ? '#A9C2B1' : '#B0B0B0';
+            personSpan.textContent = `사람: ${log.person}`;
+            div.appendChild(personSpan);
+            
+            if (log.objects && log.objects.length > 0) {
+                const objSpan = document.createElement('span');
+                objSpan.style.color = '#D6C8A1';
+                const objsText = Array.isArray(log.objects) ? log.objects.join(', ') : log.objects;
+                objSpan.textContent = ` (${objsText})`;
+                div.appendChild(objSpan);
+            }
+            
+            listEl.appendChild(div);
+        });
+    } catch (err) {
+        console.warn("Failed to load sensory history:", err);
+        listEl.innerHTML = `<div style="color: #C2635B; text-align: center; margin-top: 25px;">이력을 불러오지 못했습니다.</div>`;
+    }
+}
+
 
