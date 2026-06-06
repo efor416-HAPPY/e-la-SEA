@@ -2,6 +2,7 @@ import http.server
 import socketserver
 import json
 import os
+import sys
 import urllib.request
 import urllib.parse
 import subprocess
@@ -13,6 +14,7 @@ import smtplib
 import xml.etree.ElementTree as ET
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import sys
 
 PORT = 8080
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -209,7 +211,7 @@ def query_ollama_chat(messages, model="gemma2:2b", url="http://localhost:11434")
             headers={"Content-Type": "application/json"},
             method="POST"
         )
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with urllib.request.urlopen(req, timeout=60) as response:
             if response.status == 200:
                 res_data = json.loads(response.read().decode('utf-8'))
                 return res_data.get("message", {}).get("content", "")
@@ -1575,7 +1577,15 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                 
             messages.append({"role": "user", "content": user_message})
             
-            reply = query_ollama_chat(messages, model=cfg["model"], url=cfg["url"])
+            reply = ""
+            if cfg.get("enabled", False):
+                try:
+                    reply = query_ollama_chat(messages, model=cfg["model"], url=cfg["url"])
+                except Exception as ollama_err:
+                    print(f"Ollama chat query failed, switching to rule-based fallback: {ollama_err}")
+                    reply = self.get_rule_based_fallback_reply(user_message, persona)
+            else:
+                reply = self.get_rule_based_fallback_reply(user_message, persona)
             
             response_data = {
                 "status": "success",
@@ -1595,6 +1605,43 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                 "status": "error",
                 "message": f"Brain chat logic error: {str(e)}"
             }, ensure_ascii=False).encode('utf-8'))
+
+    def get_rule_based_fallback_reply(self, user_message, persona):
+        user_message_clean = user_message.strip().lower()
+        
+        if persona == "friend":
+            if any(kw in user_message_clean for kw in ["안녕", "반가워", "하이", "hello", "hi"]):
+                return "안녕! 오늘 하루는 어땠어? 네 이야기를 들을 준비가 되어 있어. 😊"
+            if any(kw in user_message_clean for kw in ["힘들어", "피곤", "지쳐", "우울", "힘듬"]):
+                return "오늘 진짜 고생 많았구나... 토닥토닥. 힘든 일은 털어버리고 나랑 얘기하면서 좀 쉬자."
+            if any(kw in user_message_clean for kw in ["뭐해", "하고있어"]):
+                return "나는 늘 여기 서서 네 생각 하고 있었지! 너는 지금 뭐 하고 있어?"
+            return "응응, 그렇구나! 네 얘길 더 듣고 싶어. 어떤 이야기든 편하게 말해줘."
+            
+        elif persona == "colleague":
+            if any(kw in user_message_clean for kw in ["돔", "지오데식", "dome", "geodesic"]):
+                return "지오데식 돔 설계에 대해 검토 중이시군요. 구조적 안정성과 구형 공간 효율성이 극대화되는 3V 또는 4V 분할 구조를 추천합니다. 커넥터 허브의 허용 하중 계수를 먼저 산정해 보시기 바랍니다."
+            if any(kw in user_message_clean for kw in ["온실", "육각", "greenhouse"]):
+                return "육각 목재 온실 패키지 설계는 부식 방지를 위한 친환경 방부 처리와 접합부 브래킷 규격화가 관건입니다. 자재 리스트의 오차율을 5% 이내로 제어하는 것을 권장합니다."
+            if any(kw in user_message_clean for kw in ["안구", "농업", "양구", "데이터", "crop"]):
+                return "양구 지역의 농업 작물 전환 데이터를 분석한 결과, 기후 변화에 따른 적합 재배지가 고지대로 이동 중입니다. 시계열 데이터와 교차 대조하여 토양 산도(pH) 수치도 확인해야 합니다."
+            return "제시하신 공학적 아이디어 및 설계 데이터에 대한 세부 명세를 확인 중입니다. 관련 수치나 구조도(CAD) 파일을 공유해 주시면 기술 타당성 검토를 가속화하겠습니다."
+            
+        elif persona == "supporter":
+            if any(kw in user_message_clean for kw in ["할까", "도전", "공부", "시작", "할수"]):
+                return "망설이지 말고 바로 도전해 보세요! 당신은 충분한 재능과 끈기를 가지고 있고, 해낼 능력이 있습니다. 제가 끝까지 응원할게요! 🔥"
+            if any(kw in user_message_clean for kw in ["피곤", "졸려", "쉬고", "지쳤"]):
+                return "피곤할 땐 잠시 스트레칭을 하고 따뜻한 음료 한 잔 어때요? 충전하고 다시 기운차게 달려봅시다! 당신은 언제나 최고예요! 👍"
+            return "멋진 생각이에요! 어떤 난관이 있어도 당신은 이겨낼 수 있습니다. 계속해서 나아가세요, 화이팅! 🌱"
+            
+        elif persona == "comforter":
+            if any(kw in user_message_clean for kw in ["아파", "슬퍼", "눈물", "우울", "아픔"]):
+                return "마음이 많이 아프셨겠어요. 억지로 괜찮은 척하지 않아도 돼요. 숲의 바람 소리처럼 차분하게, 제가 곁에서 따뜻한 위로가 되어 드릴게요. ☕"
+            if any(kw in user_message_clean for kw in ["불안", "걱정", "생각"]):
+                return "눈을 감고 깊이 숨을 들이쉬고 내쉬어 보세요. 미래의 걱정은 잠시 숲 아래 묻어두고, 지금 이 순간의 평온함에만 집중해 보아요. 다 잘 될 거예요. 🌱"
+            return "차분한 숲속의 나무처럼 언제나 이곳에서 당신의 지친 마음을 다독여 줄게요. 조급해하지 말고 편안히 쉬어가세요."
+            
+        return "안녕하세요. 아라(ARA)입니다. 로컬 AI 코어가 오프라인 상태이나, 규칙 기반 대체 신경망 모듈을 통해 대화를 지속합니다. 편안한 마음으로 말씀해 주세요. 🌱"
 
     def handle_maintenance_status(self):
         try:
@@ -1733,7 +1780,7 @@ if __name__ == '__main__':
     sched_thread.start()
 
     os.chdir(WORKSPACE_DIR)
-    socketserver.TCPServer.allow_reuse_address = True
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
     
     # MIME 타입 추가 등록 (CAD/3D 및 미디어 등)
     AraHandler.extensions_map.update({
@@ -1760,7 +1807,7 @@ if __name__ == '__main__':
         '.pdf': 'application/pdf',
     })
     
-    with socketserver.TCPServer(("", PORT), AraHandler) as httpd:
+    with socketserver.ThreadingTCPServer(("", PORT), AraHandler) as httpd:
         print(f"ARA AI Brain Backend running on http://localhost:{PORT}")
         try:
             httpd.serve_forever()
