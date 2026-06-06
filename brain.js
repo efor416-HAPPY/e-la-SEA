@@ -1,7 +1,7 @@
-/* --------------------------------------------------------------------------
-   ARA AI Cognitive Brain Core & Canvas Visualizer
-   -------------------------------------------------------------------------- */
-
+/* --------------------------------------------------------------------------
+   ARA AI Cognitive Brain Core & Canvas Visualizer
+   -------------------------------------------------------------------------- */
+
 class AraRationalCore {
     constructor() {
         // [1] 장기 기억 및 지혜 저장소
@@ -318,375 +318,391 @@ class AraRationalCore {
     }
 }
 
-const logicCore = new AraRationalCore();
-
-class AraBrain {
-    constructor() {
-        this.personaMode = 'friend'; // default
-        this.moodState = 'calm'; // calm, happy, thoughtful
-        this.systemStress = 0.0; // 0.0 to 1.0 (CPU load ratio)
-        this.canvas = document.getElementById('brain-neuron-canvas');
-        this.ctx = this.canvas.getContext('2d');
-        
-        // Sensory/Neural simulation properties
-        this.nodes = [];
-        this.connections = [];
-        this.pulses = [];
-        this.pulseIntensity = 1.0;
-        
-        // Define cognitive node centers with organic functions (Korean)
-        this.nodeLabels = [
-            "시각 인지 (Vision)", "청각 감각 (Audio)", "감성 조율 (Emotion)", 
-            "기억 인덱스 (Memory)", "논리 연산 (Logic)", "언어 합성 (Speech)", 
-            "지식 탐색 (Search)", "위로 심상 (Empathy)", "행동 출력 (Motor)",
-            "가설 생성 (Hypothesis)", "직관 필터 (Intuition)", "시스템 결합 (Link)"
-        ];
-        
-        this.initNeuralNetwork();
-        this.startSimulation();
-    }
-
-    /* --------------------------------------------------------------------------
-       Botanical Neural Net Simulation (Canvas Graphic Engine)
-       -------------------------------------------------------------------------- */
-    initNeuralNetwork() {
-        // Build nodes arranged in a soft leafy/circular shape
-        const count = this.nodeLabels.length;
-        const centerX = this.canvas.width / 2 || 250;
-        const centerY = this.canvas.height / 2 || 200;
-        const radius = 130;
-
-        for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
-            // Introduce organic jitter
-            const jitterX = (Math.random() - 0.5) * 30;
-            const jitterY = (Math.random() - 0.5) * 30;
-            
-            this.nodes.push({
-                id: i,
-                label: this.nodeLabels.at(i),
-                x: centerX + Math.cos(angle) * radius + jitterX,
-                y: centerY + Math.sin(angle) * radius + jitterY,
-                baseX: centerX + Math.cos(angle) * radius + jitterX,
-                baseY: centerY + Math.sin(angle) * radius + jitterY,
-                size: 6 + Math.random() * 5,
-                glow: 0.5,
-                swayOffset: Math.random() * 100,
-                active: false
-            });
-        }
-
-        // Interconnect nodes like veins on a leaf (semi-random mesh)
-        for (let i = 0; i < count; i++) {
-            // Connect to neighboring 2 nodes
-            this.connections.push({ from: i, to: (i + 1) % count });
-            this.connections.push({ from: i, to: (i + 2) % count });
-            
-            // Random cross branches simulating deep synapses
-            if (i % 3 === 0) {
-                const target = (i + Math.floor(count / 2)) % count;
-                this.connections.push({ from: i, to: target });
-            }
-        }
-    }
-
-    startSimulation() {
-        let lastTime = 0;
-        
-        const loop = (timestamp) => {
-            if (!lastTime) lastTime = timestamp;
-            const dt = (timestamp - lastTime) / 1000;
-            lastTime = timestamp;
-            
-            this.update(timestamp, dt);
-            this.render();
-            
-            requestAnimationFrame(loop);
-        };
-        
-        requestAnimationFrame(loop);
-        this.setupCanvasResizer();
-        this.setupMouseInteractions();
-    }
-
-    setupCanvasResizer() {
-        const resize = () => {
-            const parent = this.canvas.parentNode;
-            this.canvas.width = parent.clientWidth;
-            this.canvas.height = parent.clientHeight;
-            
-            // Re-center node base positions
-            const centerX = this.canvas.width / 2;
-            const centerY = this.canvas.height / 2;
-            const radius = Math.min(this.canvas.width, this.canvas.height) * 0.35;
-            
-            this.nodes.forEach((node, i) => {
-                const angle = (i / this.nodes.length) * Math.PI * 2;
-                node.baseX = centerX + Math.cos(angle) * radius;
-                node.baseY = centerY + Math.sin(angle) * radius;
-            });
-        };
-        
-        window.addEventListener('resize', resize);
-        resize(); // run initially
-    }
-
-    setupMouseInteractions() {
-        this.canvas.addEventListener('mousemove', (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            
-            // Hover check
-            this.nodes.forEach(node => {
-                const dist = Math.hypot(node.x - mouseX, node.y - mouseY);
-                if (dist < 40) {
-                    if (!node.active) {
-                        node.active = true;
-                        node.glow = 1.0;
-                        this.spawnPulse(node.id);
-                    }
-                } else {
-                    node.active = false;
-                }
-            });
-        });
-
-        this.canvas.addEventListener('click', (e) => {
-            this.stimulate(3.0);
-        });
-    }
-
-    spawnPulse(fromNodeId) {
-        // Send a pulsing leaf dewdrop along all connected branches
-        const paths = this.connections.filter(c => c.from === fromNodeId || c.to === fromNodeId);
-        paths.forEach(p => {
-            const startNode = this.nodes.at(fromNodeId);
-            const endNodeId = p.from === fromNodeId ? p.to : p.from;
-            const endNode = this.nodes.at(endNodeId);
-            
-            this.pulses.push({
-                startX: startNode.x,
-                startY: startNode.y,
-                endX: endNode.x,
-                endY: endNode.y,
-                progress: 0,
-                speed: 1.5 + Math.random() * 2.0,
-                color: 'rgba(61, 102, 78, 0.8)' // green pulse
-            });
-        });
-        
-        // Update UI
-        const activeCountEl = document.getElementById('active-neurons-count');
-        if (activeCountEl) {
-            activeCountEl.textContent = this.nodes.filter(n => n.glow > 0.6).length.toString();
-        }
-    }
-
-    stimulate(factor) {
-        this.pulseIntensity = factor;
-        
-        // Spawn multiple pulses on random connections
-        for (let i = 0; i < 8; i++) {
-            const randConn = this.connections.at(Math.floor(Math.random() * this.connections.length));
-            const startNode = this.nodes.at(randConn.from);
-            const endNode = this.nodes.at(randConn.to);
-            
-            this.pulses.push({
-                startX: startNode.x,
-                startY: startNode.y,
-                endX: endNode.x,
-                endY: endNode.y,
-                progress: 0,
-                speed: 2.0 + Math.random() * 3.0,
-                color: 'rgba(134, 168, 144, 0.9)'
-            });
-        }
-        
-        this.nodes.forEach(n => {
-            n.glow = Math.min(n.glow + 0.4, 1.0);
-        });
-    }
-
-    setSystemStress(stressRatio) {
-        this.systemStress = stressRatio;
-        const rateLabel = document.getElementById('synapse-flow-rate');
-        
-        if (stressRatio > 0.7) {
-            rateLabel.textContent = "급격함 (부하)";
-            rateLabel.style.color = "#C2635B";
-        } else if (stressRatio > 0.4) {
-            rateLabel.textContent = "활발함";
-            rateLabel.style.color = "#E4D9C6";
-        } else {
-            rateLabel.textContent = "안정적 (숲속 상태)";
-            rateLabel.style.color = "#3D664E";
-        }
-    }
-
-    update(timestamp, dt) {
-        // Sway nodes gently like leaves in the wind
-        const timeFactor = timestamp * 0.001;
-        const baseSwaySpeed = 1.0 + this.systemStress * 2.0; // moves faster under system CPU loads
-        
-        this.nodes.forEach(node => {
-            const swayX = Math.sin(timeFactor * baseSwaySpeed + node.swayOffset) * 6;
-            const swayY = Math.cos(timeFactor * baseSwaySpeed * 0.8 + node.swayOffset) * 6;
-            
-            node.x = node.baseX + swayX;
-            node.y = node.baseY + swayY;
-            
-            // Decelerate node glows over time
-            if (node.glow > 0.1) {
-                node.glow -= dt * 0.4;
-            }
-        });
-        
-        // Update signal pulses
-        for (let i = this.pulses.length - 1; i >= 0; i--) {
-            const p = this.pulses.at(i);
-            p.progress += dt * p.speed;
-            
-            if (p.progress >= 1.0) {
-                this.pulses.splice(i, 1);
-            }
-        }
-        
-        // Cool down general brain stimulation intensity
-        if (this.pulseIntensity > 1.0) {
-            this.pulseIntensity -= dt * 1.5;
-        } else {
-            this.pulseIntensity = 1.0;
-        }
-    }
-
-    render() {
-        const ctx = this.ctx;
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        // 1. Draw connecting synaptic lines (Organic tree branches/vines style)
-        this.connections.forEach(conn => {
-            const fromNode = this.nodes.at(conn.from);
-            const toNode = this.nodes.at(conn.to);
-            
-            ctx.beginPath();
-            ctx.moveTo(fromNode.x, fromNode.y);
-            
-            // Make vines curved instead of straight digital lines
-            const midX = (fromNode.x + toNode.x) / 2 + Math.sin(fromNode.id + toNode.id) * 8;
-            const midY = (fromNode.y + toNode.y) / 2 + Math.cos(fromNode.id * toNode.id) * 8;
-            ctx.quadraticCurveTo(midX, midY, toNode.x, toNode.y);
-            
-            // Gradient matching organic layout
-            ctx.strokeStyle = `rgba(61, 102, 78, ${0.15 + (fromNode.glow + toNode.glow) * 0.15})`;
-            ctx.lineWidth = 1.0 + (fromNode.glow + toNode.glow) * 1.5;
-            ctx.stroke();
-        });
-        
-        // 2. Draw pulsing dewdrops along branches
-        this.pulses.forEach(p => {
-            // Quadratic interpolation for curve matching
-            const x = p.startX + (p.endX - p.startX) * p.progress;
-            const y = p.startY + (p.endY - p.startY) * p.progress;
-            
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(x, y, 3, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Dewdrop leaf outline glow
-            ctx.shadowColor = '#86A890';
-            ctx.shadowBlur = 6;
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0; // reset
-        });
-
-        // 3. Draw cellular nodes (flower buds)
-        this.nodes.forEach(node => {
-            // Draw bud shadow
-            ctx.shadowColor = `rgba(61, 102, 78, ${node.glow * 0.4})`;
-            ctx.shadowBlur = 10 * node.glow * this.pulseIntensity;
-            
-            // Draw node outer ring (leaf structure)
-            ctx.strokeStyle = `rgba(61, 102, 78, ${0.3 + node.glow * 0.7})`;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, node.size + 4, 0, Math.PI * 2);
-            ctx.stroke();
-            
-            // Draw node center (warm bud)
-            const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.size);
-            const coreColor = node.glow > 0.6 ? '#E4D9C6' : '#C8D3C9';
-            gradient.addColorStop(0, '#FFFFFF');
-            gradient.addColorStop(0.4, coreColor);
-            gradient.addColorStop(1, '#86A890');
-            
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
-            ctx.fill();
-            
-            ctx.shadowBlur = 0; // reset shadow
-
-            // Draw clean typography labels
-            ctx.fillStyle = 'rgba(31, 45, 37, 0.85)';
-            ctx.font = 'bold 10px Nunito, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(node.label, node.x, node.y - node.size - 8);
-        });
-    }
-
-    /* --------------------------------------------------------------------------
-       Cognitive AI Logic & Dialogue Router
-       -------------------------------------------------------------------------- */
-    setPersona(mode) {
-        this.personaMode = mode;
-        this.stimulate(2.0);
-        
-        // Map persona changes to temporary moods
-        if (mode === 'comforter') this.moodState = 'calm';
-        else if (mode === 'supporter') this.moodState = 'happy';
-        else this.moodState = 'thoughtful';
-    }
-
-    getGreeting() {
-        switch (this.personaMode) {
-            case 'friend':
-                return "안녕! 다시 마주하게 되어 정말 기뻐. 오늘 하루는 어떻게 흘러갔어? 네 삶의 작은 단면이라도 좋으니 편안한 마음으로 들려줘. 가만히 귀 기울이고 있을게.";
-            case 'colleague':
-                return "안녕하십니까, 연구원님. 현재 로컬 시스템 자원 연동 및 다차원 지식 데이터 로드가 완료되었습니다. 지오데식 돔 설계 사양, 양구 농업 데이터 검토 및 시뮬레이션 작업을 수행할 준비가 되었습니다. 분석할 연구 과제를 설정해 주십시오.";
-            case 'supporter':
-                return "반가워요! 당신이 꿈꾸는 혁신적인 가설과 숭고한 도전을 진심으로 지지하고 응원합니다! 어떤 복잡한 장벽이라도 굳건한 신념으로 부딪치면 돌파할 수 있어요. 오늘 바로 그 첫 발자국을 힘차게 디뎌볼까요?";
-            case 'comforter':
-                return "어서 오세요... 세상의 복잡하고 분주한 소음은 잠시 문 밖에 접어두세요. 고요히 흐르는 숲의 숨결처럼, 지친 마음에 따뜻한 평온과 쉼이 머무실 수 있도록 조용히 다듬어 드리겠습니다.";
-        }
-    }
-
-    generateReply(input) {
-        // 하드웨어 CPU 로드율 같은 가상의 시스템 메트릭
-        const currentMetrics = { 
-            load: this.systemStress, 
-            persona: this.personaMode,
-            wisdomData: this.wisdomData
-        }; 
-        
-        // 1차원적인 if/else 대신 논리 코어에 판단을 온전히 위임
-        const decision = logicCore.perceive(input, currentMetrics);
-        
-        // 코어의 결정에 따라 UI(뇌세포 시냅스)의 시각적 반응을 제어
-        this.stimulate(decision.pulse);
-        
-        // 스탠스에 따라 페르소나 무드 자동 변경
-        if (decision.stance === 'analytical') this.moodState = 'thoughtful';
-        else if (decision.stance === 'empathetic') this.moodState = 'calm';
-        else this.moodState = 'calm';
-        
-        return decision.text;
-    }
-}
-
-// Instantiate globally so app.js can invoke methods
-window.araBrain = new AraBrain();
+const logicCore = new AraRationalCore();
+
+class AraBrain {
+    constructor() {
+        this.personaMode = 'friend'; // default
+        this.moodState = 'calm'; // calm, happy, thoughtful
+        this.systemStress = 0.0; // 0.0 to 1.0 (CPU load ratio)
+        this.canvas = document.getElementById('brain-neuron-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        
+        // Sensory/Neural simulation properties
+        this.nodes = [];
+        this.connections = [];
+        this.pulses = [];
+        this.pulseIntensity = 1.0;
+        
+        // Define cognitive node centers with organic functions (Korean)
+        this.nodeLabels = [
+            "시각 인지 (Vision)", "청각 감각 (Audio)", "감성 조율 (Emotion)", 
+            "기억 인덱스 (Memory)", "논리 연산 (Logic)", "언어 합성 (Speech)", 
+            "지식 탐색 (Search)", "위로 심상 (Empathy)", "행동 출력 (Motor)",
+            "가설 생성 (Hypothesis)", "직관 필터 (Intuition)", "시스템 결합 (Link)"
+        ];
+        
+        this.initNeuralNetwork();
+        this.startSimulation();
+    }
+
+    /* --------------------------------------------------------------------------
+       Botanical Neural Net Simulation (Canvas Graphic Engine)
+       -------------------------------------------------------------------------- */
+    initNeuralNetwork() {
+        // Build nodes arranged in a soft leafy/circular shape
+        const count = this.nodeLabels.length;
+        const centerX = this.canvas.width / 2 || 250;
+        const centerY = this.canvas.height / 2 || 200;
+        const radius = 130;
+
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            // Introduce organic jitter
+            const jitterX = (Math.random() - 0.5) * 30;
+            const jitterY = (Math.random() - 0.5) * 30;
+            
+            this.nodes.push({
+                id: i,
+                label: this.nodeLabels.at(i),
+                x: centerX + Math.cos(angle) * radius + jitterX,
+                y: centerY + Math.sin(angle) * radius + jitterY,
+                baseX: centerX + Math.cos(angle) * radius + jitterX,
+                baseY: centerY + Math.sin(angle) * radius + jitterY,
+                size: 6 + Math.random() * 5,
+                glow: 0.5,
+                swayOffset: Math.random() * 100,
+                active: false
+            });
+        }
+
+        // Interconnect nodes like veins on a leaf (semi-random mesh)
+        for (let i = 0; i < count; i++) {
+            // Connect to neighboring 2 nodes
+            this.connections.push({ from: i, to: (i + 1) % count });
+            this.connections.push({ from: i, to: (i + 2) % count });
+            
+            // Random cross branches simulating deep synapses
+            if (i % 3 === 0) {
+                const target = (i + Math.floor(count / 2)) % count;
+                this.connections.push({ from: i, to: target });
+            }
+        }
+    }
+
+    startSimulation() {
+        let lastTime = 0;
+        
+        const loop = (timestamp) => {
+            if (!lastTime) lastTime = timestamp;
+            const dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            
+            this.update(timestamp, dt);
+            this.render();
+            
+            requestAnimationFrame(loop);
+        };
+        
+        requestAnimationFrame(loop);
+        this.setupCanvasResizer();
+        this.setupMouseInteractions();
+    }
+
+    setupCanvasResizer() {
+        const resize = () => {
+            const parent = this.canvas.parentNode;
+            this.canvas.width = parent.clientWidth;
+            this.canvas.height = parent.clientHeight;
+            
+            // Re-center node base positions
+            const centerX = this.canvas.width / 2;
+            const centerY = this.canvas.height / 2;
+            const radius = Math.min(this.canvas.width, this.canvas.height) * 0.35;
+            
+            this.nodes.forEach((node, i) => {
+                const angle = (i / this.nodes.length) * Math.PI * 2;
+                node.baseX = centerX + Math.cos(angle) * radius;
+                node.baseY = centerY + Math.sin(angle) * radius;
+            });
+        };
+        
+        window.addEventListener('resize', resize);
+        resize(); // run initially
+    }
+
+    setupMouseInteractions() {
+        this.canvas.addEventListener('mousemove', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Hover check
+            this.nodes.forEach(node => {
+                const dist = Math.hypot(node.x - mouseX, node.y - mouseY);
+                if (dist < 40) {
+                    if (!node.active) {
+                        node.active = true;
+                        node.glow = 1.0;
+                        this.spawnPulse(node.id);
+                    }
+                } else {
+                    node.active = false;
+                }
+            });
+        });
+
+        this.canvas.addEventListener('click', (e) => {
+            this.stimulate(3.0);
+        });
+    }
+
+    spawnPulse(fromNodeId) {
+        // Send a pulsing leaf dewdrop along all connected branches
+        const paths = this.connections.filter(c => c.from === fromNodeId || c.to === fromNodeId);
+        
+        // Dynamic pulse color based on internal rational core stance
+        let pulseColor = 'rgba(61, 102, 78, 0.8)'; // default forest green
+        if (this.currentStance === 'joyful_scholar') {
+            pulseColor = 'rgba(228, 200, 140, 0.95)'; // Glowing amber/gold
+        } else if (this.currentStance === 'devoted_helper') {
+            pulseColor = 'rgba(240, 130, 130, 0.95)'; // Warm rose/coral
+        } else if (this.currentStance === 'wise_companion') {
+            pulseColor = 'rgba(134, 168, 144, 0.9)'; // Stable forest green/beige
+        }
+        
+        paths.forEach(p => {
+            const startNode = this.nodes.at(fromNodeId);
+            const endNodeId = p.from === fromNodeId ? p.to : p.from;
+            const endNode = this.nodes.at(endNodeId);
+            
+            this.pulses.push({
+                startX: startNode.x,
+                startY: startNode.y,
+                endX: endNode.x,
+                endY: endNode.y,
+                progress: 0,
+                speed: 1.5 + Math.random() * 2.0,
+                color: pulseColor
+            });
+        });
+        
+        // Update UI
+        const activeCountEl = document.getElementById('active-neurons-count');
+        if (activeCountEl) {
+            activeCountEl.textContent = this.nodes.filter(n => n.glow > 0.6).length.toString();
+        }
+    }
+
+    stimulate(factor) {
+        this.pulseIntensity = factor;
+        
+        // Spawn multiple pulses on random connections
+        for (let i = 0; i < 8; i++) {
+            const randConn = this.connections.at(Math.floor(Math.random() * this.connections.length));
+            const startNode = this.nodes.at(randConn.from);
+            const endNode = this.nodes.at(randConn.to);
+            
+            this.pulses.push({
+                startX: startNode.x,
+                startY: startNode.y,
+                endX: endNode.x,
+                endY: endNode.y,
+                progress: 0,
+                speed: 2.0 + Math.random() * 3.0,
+                color: 'rgba(134, 168, 144, 0.9)'
+            });
+        }
+        
+        this.nodes.forEach(n => {
+            n.glow = Math.min(n.glow + 0.4, 1.0);
+        });
+    }
+
+    setSystemStress(stressRatio) {
+        this.systemStress = stressRatio;
+        const rateLabel = document.getElementById('synapse-flow-rate');
+        
+        if (stressRatio > 0.7) {
+            rateLabel.textContent = "급격함 (부하)";
+            rateLabel.style.color = "#C2635B";
+        } else if (stressRatio > 0.4) {
+            rateLabel.textContent = "활발함";
+            rateLabel.style.color = "#E4D9C6";
+        } else {
+            rateLabel.textContent = "안정적 (숲속 상태)";
+            rateLabel.style.color = "#3D664E";
+        }
+    }
+
+    update(timestamp, dt) {
+        // Sway nodes gently like leaves in the wind, scaled by learning joy (innerJoy)
+        const timeFactor = timestamp * 0.001;
+        const joyFactor = 1.0 + (this.innerJoy || 0.0) * 1.5; // up to 2.5x movement on high joy
+        const baseSwaySpeed = (1.0 + this.systemStress * 2.0) * joyFactor;
+        
+        this.nodes.forEach(node => {
+            const swayX = Math.sin(timeFactor * baseSwaySpeed + node.swayOffset) * 6 * joyFactor;
+            const swayY = Math.cos(timeFactor * baseSwaySpeed * 0.8 + node.swayOffset) * 6 * joyFactor;
+            
+            node.x = node.baseX + swayX;
+            node.y = node.baseY + swayY;
+            
+            // Decelerate node glows over time
+            if (node.glow > 0.1) {
+                node.glow -= dt * 0.4;
+            }
+        });
+        
+        // Update signal pulses
+        for (let i = this.pulses.length - 1; i >= 0; i--) {
+            const p = this.pulses.at(i);
+            p.progress += dt * p.speed;
+            
+            if (p.progress >= 1.0) {
+                this.pulses.splice(i, 1);
+            }
+        }
+        
+        // Cool down general brain stimulation intensity
+        if (this.pulseIntensity > 1.0) {
+            this.pulseIntensity -= dt * 1.5;
+        } else {
+            this.pulseIntensity = 1.0;
+        }
+    }
+
+    render() {
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // 1. Draw connecting synaptic lines (Organic tree branches/vines style)
+        this.connections.forEach(conn => {
+            const fromNode = this.nodes.at(conn.from);
+            const toNode = this.nodes.at(conn.to);
+            
+            ctx.beginPath();
+            ctx.moveTo(fromNode.x, fromNode.y);
+            
+            // Make vines curved instead of straight digital lines
+            const midX = (fromNode.x + toNode.x) / 2 + Math.sin(fromNode.id + toNode.id) * 8;
+            const midY = (fromNode.y + toNode.y) / 2 + Math.cos(fromNode.id * toNode.id) * 8;
+            ctx.quadraticCurveTo(midX, midY, toNode.x, toNode.y);
+            
+            // Gradient matching organic layout
+            ctx.strokeStyle = `rgba(61, 102, 78, ${0.15 + (fromNode.glow + toNode.glow) * 0.15})`;
+            ctx.lineWidth = 1.0 + (fromNode.glow + toNode.glow) * 1.5;
+            ctx.stroke();
+        });
+        
+        // 2. Draw pulsing dewdrops along branches
+        this.pulses.forEach(p => {
+            // Quadratic interpolation for curve matching
+            const x = p.startX + (p.endX - p.startX) * p.progress;
+            const y = p.startY + (p.endY - p.startY) * p.progress;
+            
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Dewdrop leaf outline glow
+            ctx.shadowColor = '#86A890';
+            ctx.shadowBlur = 6;
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0; // reset
+        });
+
+        // 3. Draw cellular nodes (flower buds)
+        this.nodes.forEach(node => {
+            // Draw bud shadow
+            ctx.shadowColor = `rgba(61, 102, 78, ${node.glow * 0.4})`;
+            ctx.shadowBlur = 10 * node.glow * this.pulseIntensity;
+            
+            // Draw node outer ring (leaf structure)
+            ctx.strokeStyle = `rgba(61, 102, 78, ${0.3 + node.glow * 0.7})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, node.size + 4, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Draw node center (warm bud)
+            const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.size);
+            const coreColor = node.glow > 0.6 ? '#E4D9C6' : '#C8D3C9';
+            gradient.addColorStop(0, '#FFFFFF');
+            gradient.addColorStop(0.4, coreColor);
+            gradient.addColorStop(1, '#86A890');
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, node.size, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.shadowBlur = 0; // reset shadow
+
+            // Draw clean typography labels
+            ctx.fillStyle = 'rgba(31, 45, 37, 0.85)';
+            ctx.font = 'bold 10px Nunito, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(node.label, node.x, node.y - node.size - 8);
+        });
+    }
+
+    /* --------------------------------------------------------------------------
+       Cognitive AI Logic & Dialogue Router
+       -------------------------------------------------------------------------- */
+    setPersona(mode) {
+        this.personaMode = mode;
+        this.stimulate(2.0);
+        
+        // Map persona changes to temporary moods
+        if (mode === 'comforter') this.moodState = 'calm';
+        else if (mode === 'supporter') this.moodState = 'happy';
+        else this.moodState = 'thoughtful';
+    }
+
+    getGreeting() {
+        switch (this.personaMode) {
+            case 'friend':
+                return "안녕! 다시 마주하게 되어 정말 기뻐. 오늘 하루는 어떻게 흘러갔어? 네 삶의 작은 단면이라도 좋으니 편안한 마음으로 들려줘. 가만히 귀 기울이고 있을게.";
+            case 'colleague':
+                return "안녕하십니까, 연구원님. 현재 로컬 시스템 자원 연동 및 다차원 지식 데이터 로드가 완료되었습니다. 지오데식 돔 설계 사양, 양구 농업 데이터 검토 및 시뮬레이션 작업을 수행할 준비가 되었습니다. 분석할 연구 과제를 설정해 주십시오.";
+            case 'supporter':
+                return "반가워요! 당신이 꿈꾸는 혁신적인 가설과 숭고한 도전을 진심으로 지지하고 응원합니다! 어떤 복잡한 장벽이라도 굳건한 신념으로 부딪치면 돌파할 수 있어요. 오늘 바로 그 첫 발자국을 힘차게 디뎌볼까요?";
+            case 'comforter':
+                return "어서 오세요... 세상의 복잡하고 분주한 소음은 잠시 문 밖에 접어두세요. 고요히 흐르는 숲의 숨결처럼, 지친 마음에 따뜻한 평온과 쉼이 머무실 수 있도록 조용히 다듬어 드리겠습니다.";
+        }
+    }
+
+    generateReply(input) {
+        // 하드웨어 CPU 로드율 같은 가상의 시스템 메트릭
+        const currentMetrics = { 
+            load: this.systemStress, 
+            persona: this.personaMode,
+            wisdomData: this.wisdomData
+        }; 
+        
+        // 1차원적인 if/else 대신 논리 코어에 판단을 온전히 위임
+        const decision = logicCore.perceive(input, currentMetrics);
+        
+        // Save stance and inner joy for UI dynamic visualization overrides
+        this.currentStance = decision.stance;
+        this.innerJoy = decision.innerJoy;
+        
+        // 코어의 결정에 따라 UI(뇌세포 시냅스)의 시각적 반응을 제어
+        this.stimulate(decision.pulse);
+        
+        // 스탠스에 따라 페르소나 무드 자동 변경
+        if (decision.stance === 'joyful_scholar') this.moodState = 'thoughtful';
+        else if (decision.stance === 'devoted_helper') this.moodState = 'calm';
+        else this.moodState = 'calm';
+        
+        return decision.text;
+    }
+}
+
+// Instantiate globally so app.js can invoke methods
+window.araBrain = new AraBrain();
