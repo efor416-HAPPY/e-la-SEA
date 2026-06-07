@@ -60,11 +60,16 @@ class ActionCore:
 
     def run_task(self, task_cmd: str) -> bool:
         """Executes a system shell command safely."""
-        # Check against simple injection vectors
-        forbidden = ["sudo", "rm -rf", "drop table", "format c:"]
+        # Expanded safety keywords to block remote downloads, disk wipers, and registry hacks
+        forbidden = [
+            "sudo", "rm -rf", "drop table", "format c:", 
+            "wget", "curl", "iwr ", "downloadstring", 
+            "reg add", "reg delete", "del /", "powershell -enc", 
+            "powershell -e ", "cmd.exe /c", "sh ", "bash "
+        ]
         cmd_lower = task_cmd.lower()
         if any(f in cmd_lower for f in forbidden):
-            print(f"⚠️ [ActionCore] Blocked command containing forbidden phrase: '{task_cmd}'")
+            print(f"⚠️ [ActionCore Security Guard] Blocked unsafe command pattern: '{task_cmd}'")
             return False
 
         try:
