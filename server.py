@@ -763,29 +763,9 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
             target_path = params.get('path', [None])[0]
             action = params.get('action', ['list'])[0]
             
-            # If no path is provided, list all available system drives (C:\, E:\, etc.)
+            # Default to WORKSPACE_DIR if no path is provided or '내 PC' requested
             if not target_path or target_path == '내 PC':
-                import string
-                items = []
-                for letter in string.ascii_uppercase:
-                    drive = f"{letter}:\\"
-                    if os.path.exists(drive):
-                        items.append({
-                            "name": f"로컬 디스크 ({letter}:)",
-                            "is_dir": True,
-                            "path": drive,
-                            "size": 0,
-                            "modified": 0
-                        })
-                response_data = {
-                    "current_path": "내 PC",
-                    "items": items
-                }
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json; charset=utf-8')
-                self.end_headers()
-                self.wfile.write(json.dumps(response_data).encode('utf-8'))
-                return
+                target_path = WORKSPACE_DIR
 
             # Resolve absolute path
             if not os.path.isabs(target_path):
@@ -795,11 +775,8 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
             
             # Anti-Traversal Path Validation
             if not validate_path_safety(abs_path, WORKSPACE_DIR):
-                self.send_response(403)
-                self.send_header('Content-Type', 'application/json; charset=utf-8')
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": "Forbidden: Path traversal outside workspace blocked."}).encode('utf-8'))
-                return
+                abs_path = os.path.abspath(WORKSPACE_DIR)
+
 
             if not os.path.exists(abs_path):
                 self.send_response(404)
