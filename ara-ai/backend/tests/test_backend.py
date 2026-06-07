@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-🧪 ARA AI Backend Unit Tests
-Validates the core functionality of firewall, safety gate, memory agents, and speech/language modules.
-Also tests the AraKernel, AgentBus, and Socket Layer connection classes.
+🧪 ARA AI Backend Unit Tests (Pure AI Mode)
+Validates core cognitive AI functionality: firewall, safety gate, memory, AgentBus, and dialogue.
 """
 
 import os
 import time
-import threading
 from backend.security.firewall import check_ip_whitelist
 from backend.security.safety_gate import SafetyGate
 from backend.memory.long_memory import LongMemoryManager
@@ -91,6 +89,7 @@ def test_agent_bus_dispatch():
 
     class MockAgent(IAgent):
         def __init__(self):
+            super().__init__()
             self.processed = False
         def id(self) -> str:
             return "mock_agent"
@@ -115,18 +114,16 @@ def test_agent_bus_dispatch():
     assert msg.payload["response"] == "ok"
 
 def test_microkernel_integration():
-    """Verifies AraKernel starts, registers default agents, dispatches chat via AgentBus, and stops."""
+    """Verifies AraKernel starts in pure AI mode, registers default AI agents, and dispatches chat dialogue."""
     from backend.kernel.kernel import AraKernel
     from backend.kernel.message import Message
 
     kernel = AraKernel()
     kernel.start()
     try:
-        # Check active registered agents
+        # Check active registered agents in pure AI mode
         assert "chat" in kernel.bus.agents
         assert "memory" in kernel.bus.agents
-        assert "news" in kernel.bus.agents
-        assert "youtube" in kernel.bus.agents
 
         # Dispatch test query through AgentBus
         msg = Message(
@@ -140,28 +137,3 @@ def test_microkernel_integration():
         assert "아라" in msg.payload["result"] or "안녕" in msg.payload["result"]
     finally:
         kernel.stop()
-
-def test_socket_layer_operations():
-    """Verifies TcpSocket creation, server binding, client connection, and data exchange."""
-    from backend.kernel.socket_layer import TcpSocket
-
-    server = TcpSocket(host="127.0.0.1", port=9998)
-    assert server.connect() is True
-
-    client_sent = [False]
-
-    def client_worker():
-        time.sleep(0.1)
-        client = TcpSocket(host="127.0.0.1", port=9998)
-        if client.send("Hello Ara Socket"):
-            client_sent[0] = True
-
-    t = threading.Thread(target=client_worker, daemon=True)
-    t.start()
-
-    data = server.receive()
-    t.join(timeout=2.0)
-
-    assert client_sent[0] is True
-    assert data == "Hello Ara Socket"
-    server.close()

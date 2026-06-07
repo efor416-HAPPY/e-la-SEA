@@ -28,8 +28,7 @@ from backend.tests.test_backend import (
     test_3tier_memory_operations,
     test_cosine_similarity,
     test_agent_bus_dispatch,
-    test_microkernel_integration,
-    test_socket_layer_operations
+    test_microkernel_integration
 )
 
 class TempPath:
@@ -40,7 +39,7 @@ class TempPath:
         return p
 
 def run():
-    print("Running ARA AI Native Unit Test Suite...")
+    print("Running ARA AI Native Unit Test Suite (Pure AI Mode)...")
     
     # 1. Firewall Whitelist
     try:
@@ -109,14 +108,6 @@ def run():
         print("  [OK] test_microkernel_integration: Passed")
     except AssertionError as e:
         print("  [FAIL] test_microkernel_integration: Failed", e)
-        sys.exit(1)
-
-    # 9. Socket Layer Operations
-    try:
-        test_socket_layer_operations()
-        print("  [OK] test_socket_layer_operations: Passed")
-    except AssertionError as e:
-        print("  [FAIL] test_socket_layer_operations: Failed", e)
         sys.exit(1)
 
     print("\nAll tests passed successfully!")

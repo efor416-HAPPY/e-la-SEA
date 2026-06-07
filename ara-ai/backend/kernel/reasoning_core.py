@@ -13,7 +13,7 @@ try:
 except ImportError:
     HAS_OPENAI = False
     OpenAI = None
-from backend.kernel.memory_core import MemoryCore, MemoryItem
+from backend.kernel.memory_core import MemoryCore, MemoryItem, DialogueMemoryItem
 from backend.memory.vector_memory import VectorMemory
 
 class ReasoningCore:
@@ -69,15 +69,11 @@ class ReasoningCore:
         else:
             response_text = self.get_local_fallback(question, persona)
 
-        # 3. Store new experience in memory
-        now_str = time.strftime('%Y-%m-%d %H:%M:%S')
-        new_memory = MemoryItem(
-            title=f"대화 기록: {question[:15]}",
-            link=f"local-chat://{time.time()}",
-            description=f"사용자: {question} | 응답: {response_text}",
-            source="MemoryAgent",
-            scraped_at=now_str,
-            embedded_vector=str(VectorMemory.generate_mock_vector(question))
+        # 3. Store new dialogue experience in memory systematically
+        new_memory = DialogueMemoryItem(
+            user_msg=question,
+            bot_reply=response_text,
+            persona=persona
         )
         self.memory_core.store(new_memory)
 

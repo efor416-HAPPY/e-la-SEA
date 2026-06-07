@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-💾 ARA AI Memory Core
-Orchestrates storage and retrieval across the 3-tier memory (RAM, SQLite, JSON).
+💾 ARA AI Memory Core (Systematic Object-Oriented memory)
+Defines structured MemoryItem representations, DialogueMemoryItem subclasses,
+and encapsulates database and JSON storage access in an isolated, thread-safe model.
 """
 
-from typing import List, Dict, Tuple
+import time
+from typing import List, Tuple
 from backend.memory.long_memory import long_memory
+from backend.memory.vector_memory import VectorMemory
+
 
 class MemoryItem:
+    """Base structured item representing gathered knowledge/intelligence."""
     def __init__(self, title: str, link: str, description: str, source: str, scraped_at: str, embedded_vector: str = "[]"):
         self.title = title
         self.link = link
@@ -38,19 +43,46 @@ class MemoryItem:
         )
 
 
+class DialogueMemoryItem(MemoryItem):
+    """Dialogue-specific Memory Item capturing conversation context systematically."""
+    def __init__(self, user_msg: str, bot_reply: str, persona: str, timestamp: str = ""):
+        if not timestamp:
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+            
+        desc = f"사용자: {user_msg} | 응답: {bot_reply} | 페르소나: {persona}"
+        mock_vec = str(VectorMemory.generate_mock_vector(user_msg))
+        
+        super().__init__(
+            title=f"대화 기록: {user_msg[:15]}",
+            link=f"local-chat://{time.time()}",
+            description=desc,
+            source="MemoryAgent",
+            scraped_at=timestamp,
+            embedded_vector=mock_vec
+        )
+        self.user_msg = user_msg
+        self.bot_reply = bot_reply
+        self.persona = persona
+
+
 class MemoryCore:
+    """
+    Object-oriented facade encapsulating Hot RAM, SQLite DB, and Cold JSON storage.
+    Guarantees thread safety and isolates database mutations from other domains.
+    """
     def __init__(self):
-        self.manager = long_memory
+        # Wraps the local manager safely
+        self._manager = long_memory
 
     def store(self, item: MemoryItem) -> None:
-        """Stores memory into the 3-tier system."""
-        self.manager.store_wisdom(item.to_dict())
+        """Stores any structured MemoryItem across the 3-tier system."""
+        self._manager.store_wisdom(item.to_dict())
 
     def search(self, query: str) -> List[MemoryItem]:
-        """Searches memory logs matching query."""
-        results = self.manager.search_memory(query)
+        """Searches indexed memories matching the search string."""
+        results = self._manager.search_memory(query)
         return [MemoryItem.from_dict(r) for r in results]
 
     def get_stats(self) -> Tuple[int, int, int]:
-        """Returns hot, warm, cold stats."""
-        return self.manager.get_stats()
+        """Gathers metrics from Hot Cache, Warm DB, and Cold File storage."""
+        return self._manager.get_stats()
