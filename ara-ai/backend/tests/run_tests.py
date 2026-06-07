@@ -26,7 +26,10 @@ from backend.tests.test_backend import (
     test_safety_gate_command_injection,
     test_language_detection,
     test_3tier_memory_operations,
-    test_cosine_similarity
+    test_cosine_similarity,
+    test_agent_bus_dispatch,
+    test_microkernel_integration,
+    test_socket_layer_operations
 )
 
 class TempPath:
@@ -90,6 +93,30 @@ def run():
         print("  [OK] test_cosine_similarity: Passed")
     except AssertionError as e:
         print("  [FAIL] test_cosine_similarity: Failed", e)
+        sys.exit(1)
+
+    # 7. Agent Bus Dispatch
+    try:
+        test_agent_bus_dispatch()
+        print("  [OK] test_agent_bus_dispatch: Passed")
+    except AssertionError as e:
+        print("  [FAIL] test_agent_bus_dispatch: Failed", e)
+        sys.exit(1)
+
+    # 8. Microkernel Integration
+    try:
+        test_microkernel_integration()
+        print("  [OK] test_microkernel_integration: Passed")
+    except AssertionError as e:
+        print("  [FAIL] test_microkernel_integration: Failed", e)
+        sys.exit(1)
+
+    # 9. Socket Layer Operations
+    try:
+        test_socket_layer_operations()
+        print("  [OK] test_socket_layer_operations: Passed")
+    except AssertionError as e:
+        print("  [FAIL] test_socket_layer_operations: Failed", e)
         sys.exit(1)
 
     print("\nAll tests passed successfully!")

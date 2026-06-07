@@ -5,7 +5,12 @@ Handles speech synthesis using OpenAI TTS or local system/mock fallbacks.
 """
 
 import os
-from openai import OpenAI
+try:
+    from openai import OpenAI
+    HAS_OPENAI = True
+except ImportError:
+    HAS_OPENAI = False
+    OpenAI = None
 
 class TextToSpeechSynthesizer:
     """Generates audio speech output from raw text strings."""
@@ -20,7 +25,7 @@ class TextToSpeechSynthesizer:
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        if self.api_key:
+        if HAS_OPENAI and self.api_key:
             try:
                 client = OpenAI(api_key=self.api_key)
                 response = client.audio.speech.create(

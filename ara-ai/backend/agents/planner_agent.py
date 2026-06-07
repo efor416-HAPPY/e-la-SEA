@@ -4,6 +4,10 @@
 Translates high-level User Goals into structural lists of Tasks, SubTasks, and executable Actions.
 """
 
+from backend.agents.base_agent import IAgent
+from backend.kernel.message import Message
+
+
 class Action:
     def __init__(self, action_type: str, target: str, details=""):
         self.action_type = action_type  # READ, WRITE, COGNITIVE, MES_SYNC, ERP_QUERY, AUDIT
@@ -13,6 +17,7 @@ class Action:
     def to_dict(self) -> dict:
         return {"action_type": self.action_type, "target": self.target, "details": self.details}
 
+
 class SubTask:
     def __init__(self, title: str):
         self.title = title
@@ -20,6 +25,7 @@ class SubTask:
 
     def to_dict(self) -> dict:
         return {"title": self.title, "actions": [a.to_dict() for a in self.actions]}
+
 
 class Task:
     def __init__(self, title: str):
@@ -29,9 +35,30 @@ class Task:
     def to_dict(self) -> dict:
         return {"title": self.title, "subtasks": [st.to_dict() for st in self.subtasks]}
 
-class PlannerAgent:
+
+class PlannerAgent(IAgent):
     """Decomposes goals into hierarchical structures for autonomous agents."""
     
+    def id(self) -> str:
+        return "planner"
+
+    def initialize(self) -> bool:
+        return True
+
+    def process(self, message: Message) -> bool:
+        """Processes planning queries received via the AgentBus."""
+        if message.action == "plan":
+            goal_desc = message.payload.get("goal_desc", "")
+            context = message.payload.get("context", {})
+            tasks = self.generate_plan(goal_desc, context)
+            if isinstance(message.payload, dict):
+                message.payload["result"] = [t.to_dict() for t in tasks]
+            return True
+        return False
+
+    def shutdown(self) -> None:
+        pass
+
     def generate_plan(self, goal_desc: str, context: dict) -> list[Task]:
         tasks = []
         desc = goal_desc.lower()
@@ -63,5 +90,6 @@ class PlannerAgent:
             
         return tasks
 
-# Global Planner Agent
+
+# Global Planner Agent Instance
 planner_agent = PlannerAgent()

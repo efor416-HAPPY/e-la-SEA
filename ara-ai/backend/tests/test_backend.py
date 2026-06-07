@@ -2,9 +2,12 @@
 """
 🧪 ARA AI Backend Unit Tests
 Validates the core functionality of firewall, safety gate, memory agents, and speech/language modules.
+Also tests the AraKernel, AgentBus, and Socket Layer connection classes.
 """
 
 import os
+import time
+import threading
 from backend.security.firewall import check_ip_whitelist
 from backend.security.safety_gate import SafetyGate
 from backend.memory.long_memory import LongMemoryManager
@@ -79,3 +82,86 @@ def test_cosine_similarity():
     
     assert abs(VectorMemory.cosine_similarity(v1, v2) - 1.0) < 1e-6
     assert abs(VectorMemory.cosine_similarity(v1, v3) - 0.0) < 1e-6
+
+def test_agent_bus_dispatch():
+    """Verifies AgentBus registers and dispatches Messages to agents correctly."""
+    from backend.kernel.agent_bus import AgentBus
+    from backend.kernel.message import Message
+    from backend.agents.base_agent import IAgent
+
+    class MockAgent(IAgent):
+        def __init__(self):
+            self.processed = False
+        def id(self) -> str:
+            return "mock_agent"
+        def initialize(self) -> bool:
+            return True
+        def process(self, msg: Message) -> bool:
+            if msg.action == "test":
+                self.processed = True
+                msg.payload["response"] = "ok"
+                return True
+            return False
+        def shutdown(self) -> None:
+            pass
+
+    bus = AgentBus()
+    agent = MockAgent()
+    bus.register_agent(agent)
+
+    msg = Message(source="test_runner", target="mock_agent", action="test", payload={})
+    assert bus.dispatch(msg) is True
+    assert agent.processed is True
+    assert msg.payload["response"] == "ok"
+
+def test_microkernel_integration():
+    """Verifies AraKernel starts, registers default agents, dispatches chat via AgentBus, and stops."""
+    from backend.kernel.kernel import AraKernel
+    from backend.kernel.message import Message
+
+    kernel = AraKernel()
+    kernel.start()
+    try:
+        # Check active registered agents
+        assert "chat" in kernel.bus.agents
+        assert "memory" in kernel.bus.agents
+        assert "news" in kernel.bus.agents
+        assert "youtube" in kernel.bus.agents
+
+        # Dispatch test query through AgentBus
+        msg = Message(
+            source="test_runner",
+            target="chat",
+            action="chat",
+            payload={"message": "안녕하세요", "persona": "friend"}
+        )
+        assert kernel.bus.dispatch(msg) is True
+        assert "result" in msg.payload
+        assert "아라" in msg.payload["result"] or "안녕" in msg.payload["result"]
+    finally:
+        kernel.stop()
+
+def test_socket_layer_operations():
+    """Verifies TcpSocket creation, server binding, client connection, and data exchange."""
+    from backend.kernel.socket_layer import TcpSocket
+
+    server = TcpSocket(host="127.0.0.1", port=9998)
+    assert server.connect() is True
+
+    client_sent = [False]
+
+    def client_worker():
+        time.sleep(0.1)
+        client = TcpSocket(host="127.0.0.1", port=9998)
+        if client.send("Hello Ara Socket"):
+            client_sent[0] = True
+
+    t = threading.Thread(target=client_worker, daemon=True)
+    t.start()
+
+    data = server.receive()
+    t.join(timeout=2.0)
+
+    assert client_sent[0] is True
+    assert data == "Hello Ara Socket"
+    server.close()
