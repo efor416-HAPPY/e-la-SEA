@@ -1,0 +1,18 @@
+{
+  "name": "ara-ai-android",
+  "version": "1.0.0",
+  "description": "Android Wrapper for ARA AI utilizing Capacitor",
+  "main": "index.js",
+  "scripts": {
+    "init": "cap init",
+    "add-android": "cap add android",
+    "sync": "cap sync"
+  },
+  "dependencies": {
+    "@capacitor/core": "^5.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.0.0",
+    "@capacitor/android": "^5.0.0"
+  }
+}
