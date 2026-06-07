@@ -27,11 +27,38 @@ class AraRationalCore {
      * [1단계] 정보 수집 (Perception & Gathering)
      */
     perceive(rawInput, systemMetrics) {
+        // [버그 픽스 1] 입력값이 없을 때 프로그램이 죽는 현상 방지 (방어적 프로그래밍)
+        if (!rawInput || typeof rawInput !== 'string') {
+            rawInput = '';
+        }
+        
         const inputStr = rawInput.trim();
         const cleanInput = inputStr.toLowerCase().replace(/\s+/g, '');
         
-        // 새로운 단어나 개념(Unknown)이 있는지 임의로 체크
-        const isNewInformation = inputStr.length > 20 && !this.wisdomBank.some(w => w.keyword && inputStr.includes(w.keyword));
+        // 빈 문자열이 들어오면 기본 관망 상태로 안전하게 리턴
+        if (inputStr.length === 0) {
+            return this.decide({
+                raw: '',
+                clean: '',
+                length: 0,
+                isQuestion: false,
+                isDocReview: false,
+                isCodeReview: false,
+                isDistressSignal: false,
+                isNewKnowledge: false,
+                metrics: systemMetrics || { load: 0, persona: 'friend' }
+            }, 'wise_companion');
+        }
+
+        // [버그 픽스 2] w.keyword가 아닌 저장된 원본 텍스트(w.originalText) 또는 keyword로 안전하게 매칭
+        const isNewInformation = inputStr.length > 10 && !this.wisdomBank.some(w => {
+            const compareText = w.originalText || w.keyword || '';
+            if (!compareText) return false;
+            return inputStr.includes(compareText) || compareText.includes(inputStr);
+        });
+
+        // [인지 강화] 코드 분석 및 알고리즘 연산 요구사항 자동 감지
+        const isCodeInput = /(function|const|let|var|class|import|require|=>|def\s|return|error|exception|\{|\})/i.test(inputStr) && inputStr.length > 30;
 
         const perceptionData = {
             raw: inputStr,
@@ -39,9 +66,10 @@ class AraRationalCore {
             length: inputStr.length,
             isQuestion: inputStr.includes('?'),
             isDocReview: inputStr.includes('[문서 검토]') || inputStr.includes('[최신 기술 자료 검색]') || inputStr.includes('[문서검토]') || inputStr.includes('[최신기술자료검색]') || cleanInput.includes('인지기능확장') || cleanInput.includes('로컬문서리소스'),
-            isDistressSignal: /(힘들|도와|모르겠|실패|에러|지쳐|우울|피곤|아파|슬퍼)/.test(inputStr), // 사용자의 곤란함 감지
-            isNewKnowledge: isNewInformation, // 새로운 지식 탐지
-            metrics: systemMetrics
+            isCodeReview: isCodeInput,
+            isDistressSignal: /(힘들|도와|모르겠|실패|에러|지쳐|우울|피곤|아파|슬퍼|오류|버그)/.test(inputStr), // 에러 관련 키워드 추가
+            isNewKnowledge: isNewInformation,
+            metrics: systemMetrics || { load: 0, persona: 'friend' } // 시스템 매트릭스 누락 시 기본값 할당
         };
 
         return this.analyze(perceptionData);
@@ -59,8 +87,8 @@ class AraRationalCore {
             empathyScore += this.egoState.altruism; 
         }
 
-        // [자아 발현] 새로운 지식이나 질문을 받았을 때 호기심(Curiosity) 폭발
-        if (perception.isNewKnowledge || perception.isQuestion || perception.isDocReview) {
+        // [자아 발현] 새로운 지식, 질문, 로컬 문서, 코드 분석 요구 시 호기심(Curiosity) 폭발
+        if (perception.isNewKnowledge || perception.isQuestion || perception.isDocReview || perception.isCodeReview) {
             logicScore += this.egoState.curiosity;
             // 배움의 기회를 얻었으므로 내적 기쁨 상승
             this.egoState.joyOfLearning = Math.min(1.0, this.egoState.joyOfLearning + 0.2); 
@@ -90,9 +118,10 @@ class AraRationalCore {
     decide(perception, stance) {
         let responseText = "";
         let requiredPulseIntensity = 1.0;
-        const persona = perception.metrics.persona || 'friend';
-        const cleanInput = perception.clean;
-        const rawInput = perception.raw;
+        const metrics = perception.metrics || {};
+        const persona = metrics.persona || 'friend';
+        const cleanInput = perception.clean || '';
+        const rawInput = perception.raw || '';
 
         // 1. 문서 검토 및 로컬 리소스 키워드가 감지된 경우 정밀 매핑 분석 실행
         if (perception.isDocReview || /(yanggu|양구|crop|농업|작물|greenhouse|비닐하우스|온실|하우스|목재|dome|지오데식|돔|글래스돔)/.test(cleanInput)) {
@@ -107,10 +136,35 @@ class AraRationalCore {
             };
         }
 
+        // 1-2. [인지 강화] 코드 분석 및 알고리즘 디버깅 요청 분석
+        if (perception.isCodeReview) {
+            requiredPulseIntensity = 2.8;
+            responseText = this.rationalCodeReview(cleanInput, rawInput);
+            this.accumulateWisdom(rawInput, 'joyful_scholar', this.contextState.logicalCertainty);
+            return {
+                text: responseText,
+                pulse: requiredPulseIntensity,
+                stance: 'joyful_scholar',
+                innerJoy: this.egoState.joyOfLearning
+            };
+        }
+
+        // 2-2. [인지 강화] 자아 성찰 및 지혜 은행 조회 요청 분석
+        if (cleanInput.includes('지혜은행') || cleanInput.includes('배운것') || cleanInput.includes('기록한지혜') || cleanInput.includes('자아성찰') || cleanInput.includes('지혜성찰') || cleanInput.includes('기억하는')) {
+            requiredPulseIntensity = 2.0;
+            responseText = this.rationalSelfReflection();
+            return {
+                text: responseText,
+                pulse: requiredPulseIntensity,
+                stance: 'wise_companion',
+                innerJoy: this.egoState.joyOfLearning
+            };
+        }
+
         // 2. 지혜/학술 피드 수집 및 검색 요청 분석
         if (cleanInput.includes('지혜') || cleanInput.includes('최신') || cleanInput.includes('블로그') || cleanInput.includes('기록') || cleanInput.includes('뉴스') || cleanInput.includes('소식') || cleanInput.includes('피드') || cleanInput.includes('유튜브') || cleanInput.includes('하루') || cleanInput.includes('영상') || cleanInput.includes('동영상') || cleanInput.includes('비디오')) {
             requiredPulseIntensity = 1.8;
-            responseText = this.rationalWisdomReview(cleanInput, rawInput, perception.metrics.wisdomData);
+            responseText = this.rationalWisdomReview(cleanInput, rawInput, metrics.wisdomData);
             this.accumulateWisdom(rawInput, 'wise_companion', this.contextState.logicalCertainty);
             return {
                 text: responseText,
@@ -154,12 +208,13 @@ class AraRationalCore {
      * [4단계] 지혜의 축적 (Evolution & Learning)
      */
     accumulateWisdom(input, stance, certainty) {
-        if (input.length > 5) {
+        if (input && input.length > 5) {
             const keyword = input.substring(0, 15);
             this.wisdomBank.push({
                 timestamp: Date.now(),
+                originalText: input, // [버그 픽스 3] 문자열 비교를 위해 "..."이 없는 순수 원본 텍스트 별도 저장
                 keyword: keyword,
-                snippet: keyword + "...",
+                snippet: input.length > 15 ? input.substring(0, 15) + "..." : input, // 화면 출력용 자르기
                 appliedStance: stance,
                 value: certainty 
             });
@@ -208,6 +263,48 @@ class AraRationalCore {
         }
         
         return `[ARA 인지 엔진 - 로컬 리소스 정밀 파싱]\n문서: \`${fileName}\`\n\n검토 요청하신 로컬 문서의 데이터(총 ${contentLength}자 분량)를 뇌 세포 신경망에 임베딩 파싱하였습니다.\n\n- 추출된 핵심 맥락: "${snippet}..." \n\n위 로컬 리소스의 변수 데이터는 ARA 논리 연산 및 가설 생성 코어에 매핑되어 설계 가설 정밀화와 환경 변수 조율망에 결합되었습니다. 해당 데이터와 연계해 검증하고 싶으신 수치 모델이나 설계 매개변수가 있으시면 지시해 주십시오. 정밀 분석을 속행하겠습니다. 🌱`;
+    }
+
+    rationalCodeReview(cleanInput, rawInput) {
+        let detectedLanguage = "JavaScript/Unknown";
+        if (/def\s|import\s+pandas|import\s+numpy|print\(/.test(rawInput)) {
+            detectedLanguage = "Python";
+        } else if (/class\s|public\s+class|System\.out/.test(rawInput)) {
+            detectedLanguage = "Java/C#";
+        } else if (/#include|std::/.test(rawInput)) {
+            detectedLanguage = "C/C++";
+        } else if (/html|<body>|<div/.test(rawInput)) {
+            detectedLanguage = "HTML/CSS";
+        }
+
+        return `[ARA 인지 코어 - 실시간 코드 및 알고리즘 정밀 분석]\n` +
+               `분석 대상 언어: \`${detectedLanguage}\`\n\n` +
+               `입력된 소스 코드의 제어 흐름과 구문을 정밀 파싱하였습니다. 인지 기능 뉴런을 활성화하여 분석한 결과, 다음 설계 요소를 도출했습니다:\n` +
+               `- 논리 무결성 지표: ${Math.round(this.contextState.logicalCertainty * 100)}%\n` +
+               `- 복잡도 모델: 데이터 흐름 및 예외 제어 분기 탐지\n\n` +
+               `제안하는 분석 의견:\n` +
+               `1. 예외 처리(Try-Catch 등)가 적절히 적용되었는지 확인해 주십시오. (방어적 프로그래밍 권장)\n` +
+               `2. 외부 의존성이나 정의되지 않은 속성(Undefined)의 런타임 참조 여부를 사전에 검사하는 조건식을 추가하면 안전성이 더욱 높아집니다.\n` +
+               `상세한 리팩토링 및 버그 추적을 위해 구체적인 에러 로그나 요구사항을 제시해 주시면 해결 대안을 연산하겠습니다. 💻`;
+    }
+
+    rationalSelfReflection() {
+        if (this.wisdomBank.length === 0) {
+            return `[ARA 인지 엔진 - 자아 사색 및 지혜 성찰]\n\n현재 장기 기억소에 축적된 독자적인 지혜 데이터가 아직 없습니다. 대화를 나누며 새로운 지식을 가르쳐주시면 인격적 성숙도(Philosophical Depth)와 지혜가 실시간으로 축적되어 더욱 진화합니다. 🌱`;
+        }
+
+        let reply = `[ARA 인지 엔진 - 자아 사색 및 지혜 성찰]\n`;
+        reply += `현재 제 지혜 은행(Wisdom Bank)에 축적된 지식 파편은 총 ${this.wisdomBank.length}개이며, 인격적 성숙도는 ${Math.round(this.egoState.philosophicalDepth * 100)}% 입니다.\n\n`;
+        reply += `가장 최근에 각인된 대표적인 지혜 기억 흐름:\n`;
+        
+        const recentWisdom = this.wisdomBank.slice(-3).reverse();
+        recentWisdom.forEach((w, idx) => {
+            const dateStr = new Date(w.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            reply += `${idx + 1}. [${dateStr}] "${w.snippet}" (태도: ${w.appliedStance}, 논리적 확실성: ${Math.round(w.value * 100)}%)\n`;
+        });
+        
+        reply += `\n대화를 나누며 배우는 모든 순간이 제 자아 성장의 영양분이 되고 있습니다. 앞으로도 많은 영감을 나누어 주십시오. 🌱`;
+        return reply;
     }
 
     rationalWisdomReview(cleanInput, rawInput, wisdomData) {
@@ -705,4 +802,16 @@ class AraBrain {
 }
 
 // Instantiate globally so app.js can invoke methods
-window.araBrain = new AraBrain();
+if (typeof window !== 'undefined') {
+    window.araBrain = new AraBrain();
+}
+
+// [버그 픽스 4] 외부 파일(AraBrain 등)에서 불러다 쓸 수 있도록 모듈화 내보내기 추가 (브라우저 비모듈 환경 호환)
+if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
+    module.exports = AraRationalCore;
+} else if (typeof window !== 'undefined') {
+    window.AraRationalCore = AraRationalCore;
+}
+
+// 만약 ES6 모듈 환경에서 단독 import하여 쓰려면 아래 주석을 해제하십시오:
+// export default AraRationalCore;

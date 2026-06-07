@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ara-collector-deployment
+  namespace: ara-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ara-collector
+  template:
+    metadata:
+      labels:
+        app: ara-collector
+    spec:
+      containers:
+      - name: ara-collector
+        image: ara-platform/ara-collector:v1.0.0
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:9092"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ara-reasoning-deployment
+  namespace: ara-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ara-reasoning
+  template:
+    metadata:
+      labels:
+        app: ara-reasoning
+    spec:
+      containers:
+      - name: ara-reasoning
+        image: ara-platform/ara-reasoning:v1.0.0
+        ports:
+        - containerPort: 8081
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ara-gateway-service
+  namespace: ara-platform
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: ara-gateway

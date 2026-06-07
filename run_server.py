@@ -122,6 +122,85 @@ class CADViewerHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         # Fallback to serving static files
         return super().do_GET()
 
+    def do_POST(self):
+        # API Endpoint: Execute safe local applications (Notepad, Calculator, Explorer, Vision, etc.)
+        if self.path.startswith('/api/execute'):
+            import json
+            import subprocess
+            import platform
+            import urllib.parse
+            
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                params = json.loads(post_data.decode('utf-8'))
+                target = params.get('target', '')
+                
+                if not target:
+                    self.send_response(400)
+                    self.send_header('Content-Type', 'application/json; charset=utf-8')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": "No target specified"}).encode('utf-8'))
+                    return
+                
+                response_data = {"status": "error", "message": "실행이 지원되지 않는 플랫폼입니다."}
+                
+                if platform.system() == "Windows":
+                    is_safe = False
+                    safe_apps = {
+                        "notepad": "notepad.exe",
+                        "calculator": "calc.exe",
+                        "explorer": "explorer.exe",
+                        "cmd": "cmd.exe"
+                    }
+                    
+                    app_cmd = safe_apps.get(target.lower())
+                    if app_cmd:
+                        subprocess.Popen(app_cmd)
+                        is_safe = True
+                        message = f"성공적으로 {target}을(를) 예비 서버(8000)를 통해 실행했습니다."
+                    elif target.startswith('http://') or target.startswith('https://'):
+                        parsed_url = urllib.parse.urlparse(target)
+                        if parsed_url.scheme in ('http', 'https') and parsed_url.netloc:
+                            os.startfile(target)
+                            is_safe = True
+                            message = f"예비 서버를 통해 URL을 열었습니다: {target}"
+                    elif target.lower() == "vision":
+                        python_bin = sys.executable or "python"
+                        script_path = os.path.join(os.getcwd(), 'recognition_utility.py')
+                        subprocess.Popen([python_bin, script_path])
+                        is_safe = True
+                        message = "예비 서버를 통해 로컬 인지 감각기 엔진을 구동했습니다."
+                    elif os.path.exists(target):
+                        abs_workspace = os.path.abspath('.')
+                        abs_target = os.path.abspath(target)
+                        if abs_target.startswith(abs_workspace):
+                            os.startfile(abs_target)
+                            is_safe = True
+                            message = f"예비 서버를 통해 로컬 경로를 열었습니다: {target}"
+                    
+                    if is_safe:
+                        response_data = {"status": "success", "message": message}
+                    else:
+                        response_data = {"status": "error", "message": "안전하지 않은 명령이거나 지원하지 않는 경로 대상입니다."}
+                
+                self.send_response(200)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', '*')
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
 def run_server():
     # 스크립트 파일이 위치한 디렉토리로 작업 디렉토리 변경
     script_dir = os.path.dirname(os.path.abspath(__file__))

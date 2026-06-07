@@ -401,9 +401,38 @@
                     <span class="naver-logo" style="background-color: #03C75A; color: white;">N</span>
                     <h2 style="font-size: 16px; color: var(--accent-green); margin: 0;">네이버 서치어드바이저 제휴 API 연동 (Crawl Request)</h2>
                 </div>
-                <button id="btn-toggle-advisor-config" class="btn-tool" style="margin: 0; padding: 6px 12px; font-size: 11px;">
-                    <i data-lucide="settings" style="width: 12px; height: 12px;"></i> API 설정
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-toggle-advisor-guide" class="btn-tool" style="margin: 0; padding: 6px 12px; font-size: 11px; display: flex; align-items: center; gap: 4px;">
+                        <i data-lucide="help-circle" style="width: 12px; height: 12px; color: var(--accent-soil);"></i> 연동 체크리스트
+                    </button>
+                    <button id="btn-toggle-advisor-config" class="btn-tool" style="margin: 0; padding: 6px 12px; font-size: 11px;">
+                        <i data-lucide="settings" style="width: 12px; height: 12px;"></i> API 설정
+                    </button>
+                </div>
+            </div>
+
+            <!-- Checklist Guide Section (Collapsible, Hidden by default) -->
+            <div id="searchadvisor-checklist-section" class="advisor-config-box" style="display: none; background: rgba(242, 236, 225, 0.45); padding: 16px; border-radius: var(--border-radius-md); border: 1px solid rgba(180, 198, 183, 0.35); flex-direction: column; gap: 12px;">
+                <div style="font-size: 12px; font-weight: bold; color: var(--accent-soil); display: flex; align-items: center; gap: 6px;">
+                    <i data-lucide="help-circle" style="width: 14px; height: 14px; color: var(--accent-soil);"></i>
+                    <span>연동 오류 방지 및 에러 해결을 위한 필수 체크리스트</span>
+                </div>
+                <ul style="font-size: 11px; margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; line-height: 1.5; color: var(--text-primary);">
+                    <li>
+                        <strong>소유확인된 도메인과 완벽한 일치 여부 (가장 흔한 실수)</strong><br>
+                        서치어드바이저 웹마스터 도구에 소유 확인을 완료한 대표 사이트 주소와 API 요청 URL이 스키마(http/https) 및 www 유무까지 완벽하게 일치해야 합니다.<br>
+                        <span style="color: #c2635b;">- 올바른 예: <code>https://your-site.com/subpage</code> (등록 주소가 <code>https://your-site.com</code>인 경우)</span><br>
+                        <span style="color: #c2635b;">- 잘못된 예: <code>https://www.your-site.com/subpage</code> (www 누락/추가 시 다른 사이트로 인식)</span>
+                    </li>
+                    <li>
+                        <strong>Access Token 만료 및 오타/공백 확인</strong><br>
+                        발급받은 토큰이 유효한지 확인하고 복사/붙여넣기 시 공백이나 누락된 문자가 없어야 합니다. 필요시 웹마스터 도구 설정에서 토큰을 재발급받아 적용해 보세요.
+                    </li>
+                    <li>
+                        <strong>리다이렉트(Redirect) 유무</strong><br>
+                        수집을 요청하는 URL은 브라우저에서 최종적으로 열리는 실제 랜딩 페이지여야 합니다. 해당 URL이 다른 페이지로 강제 이동(Redirect)되도록 설정되어 있으면 수집 요청이 실패로 처리됩니다.
+                    </li>
+                </ul>
             </div>
 
             <!-- Configuration Section (Hidden by default) -->

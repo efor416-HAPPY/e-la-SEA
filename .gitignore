@@ -13,8 +13,18 @@ __pycache__/
 # Local downloads and reports
 downloads/
 *.zip
+*.ZIP
 *.xlsx
 *.png
+pdf/
+data/베트남어/
+data/인벤터 교육/
+data/일취월장 중국어 회화초급 Part2 [총20강] 21-40강/
+data/캐드교육/
+*.wmv
+*.WMV
+*.avi
+*.AVI
 
 # CMSIS-Toolbox temporary and build output files
 *.cbuild-idx.yml

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARA Insight Agent - Premium AI Intelligence Dashboard</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="app-container">
+        <!-- 1. Header Area -->
+        <header class="app-header">
+            <div class="logo-area">
+                <i class="fa-solid fa-brain-circuit logo-icon"></i>
+                <div class="brand">
+                    <h1>ARA Insight Agent</h1>
+                    <span class="subtitle">Enterprise AI Intelligence Platform</span>
+                </div>
+            </div>
+            <div class="system-status">
+                <div class="status-item online">
+                    <span class="dot"></span> Kafka Bus
+                </div>
+                <div class="status-item online">
+                    <span class="dot"></span> PostgreSQL (Warm)
+                </div>
+                <div class="status-item online">
+                    <span class="dot"></span> Qdrant DB (Cold)
+                </div>
+                <div class="status-item active">
+                    <span class="dot-pulse"></span> Collectors Active
+                </div>
+            </div>
+        </header>
+
+        <!-- 2. Grid Dashboard Layout -->
+        <main class="dashboard-grid">
+            <!-- Left Panel: Event Simulator & Control -->
+            <section class="card simulator-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-gamepad"></i> Event Simulator</h2>
+                    <span class="badge badge-accent">Demo Mode</span>
+                </div>
+                <p class="card-desc">실시간 거시경제 변화와 글로벌 충격 요소를 가상으로 인지 파이프라인에 주입합니다.</p>
+                <div class="simulator-buttons">
+                    <button class="btn btn-primary" onclick="triggerEvent('fed_rate_cut')">
+                        <i class="fa-solid fa-percent"></i> 미 연준 기준금리 인하 (0.25%p)
+                    </button>
+                    <button class="btn btn-warning" onclick="triggerEvent('ai_chip_reg')">
+                        <i class="fa-solid fa-microchip"></i> EU 인공지능 칩 규제 법안 발효
+                    </button>
+                    <button class="btn btn-danger" onclick="triggerEvent('oil_surge')">
+                        <i class="fa-solid fa-droplet"></i> 중동 분쟁에 따른 유가 급등
+                    </button>
+                    <button class="btn btn-success" onclick="triggerEvent('korea_semiconductor')">
+                        <i class="fa-solid fa-industry"></i> 한국 반도체 수출 30% 급증
+                    </button>
+                </div>
+            </section>
+
+            <!-- Center Panel: Economic Charts -->
+            <section class="card chart-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-chart-line"></i> Macroeconomic Trends</h2>
+                    <div class="chart-legend">
+                        <span class="legend-dot rate"></span> 금리
+                        <span class="legend-dot exchange"></span> 환율 (USD/KRW)
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="macroChart"></canvas>
+                </div>
+            </section>
+
+            <!-- Right Panel: Live Knowledge Feed -->
+            <section class="card feed-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-rss"></i> Live Knowledge Bus</h2>
+                    <span class="feed-count" id="feedCounter">0 events</span>
+                </div>
+                <div class="feed-stream" id="knowledgeFeed">
+                    <!-- Events will populate here (Newest First) -->
+                    <div class="feed-placeholder">
+                        <i class="fa-solid fa-satellite-dish fa-spin"></i>
+                        <p>이벤트 시뮬레이터를 통해 데이터를 주입해 주세요...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Lower Left: AI Agent Reasoning & Scenarios -->
+            <section class="card reasoning-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-wand-magic-sparkles"></i> AI Reasoning & Scenarios</h2>
+                </div>
+                <div class="reasoning-body" id="reasoningOutput">
+                    <p class="placeholder-text">실시간 수집된 교차 검증 데이터를 기반으로 의사결정 시나리오를 자동 도출합니다.</p>
+                </div>
+            </section>
+
+            <!-- Lower Right: Security Gate & DLQ -->
+            <section class="card safety-card">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-shield-halved"></i> Ingestion Safety Gate</h2>
+                    <div class="dlq-status">
+                        DLQ: <span class="dlq-count" id="dlqCount">0</span>
+                    </div>
+                </div>
+                <div class="safety-log" id="safetyLog">
+                    <div class="log-entry system"><span class="time">[04:27:10]</span> Safety Gate active. System scan protection enabled.</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Script Resource -->
+    <script src="app.js"></script>
+</body>
+</html>
