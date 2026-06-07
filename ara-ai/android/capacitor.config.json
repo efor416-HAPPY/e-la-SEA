@@ -1,0 +1,6 @@
+{
+  "appId": "com.ara.ai.app",
+  "appName": "ARA AI",
+  "webDir": "../frontend",
+  "bundledWebRuntime": false
+}
