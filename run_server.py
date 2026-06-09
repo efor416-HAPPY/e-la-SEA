@@ -156,7 +156,7 @@ class CADViewerHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     
                     app_cmd = safe_apps.get(target.lower())
                     if app_cmd:
-                        subprocess.Popen(app_cmd)
+                        subprocess.Popen(app_cmd, close_fds=True)
                         is_safe = True
                         message = f"성공적으로 {target}을(를) 예비 서버(8000)를 통해 실행했습니다."
                     elif target.startswith('http://') or target.startswith('https://'):
@@ -168,7 +168,7 @@ class CADViewerHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     elif target.lower() == "vision":
                         python_bin = sys.executable or "python"
                         script_path = os.path.join(os.getcwd(), 'recognition_utility.py')
-                        subprocess.Popen([python_bin, script_path])
+                        subprocess.Popen([python_bin, script_path], close_fds=True)
                         is_safe = True
                         message = "예비 서버를 통해 로컬 인지 감각기 엔진을 구동했습니다."
                     elif os.path.exists(target):
@@ -254,7 +254,8 @@ def run_server():
     threading.Thread(target=open_browser, args=(url,), daemon=True).start()
 
     # 서버 바인딩 및 시작
-    with socketserver.TCPServer((HOST, port), handler) as httpd:
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
+    with socketserver.ThreadingTCPServer((HOST, port), handler) as httpd:
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

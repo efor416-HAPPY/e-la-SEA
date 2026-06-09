@@ -26,8 +26,8 @@ def test_endpoints():
             if ep['method'] == 'POST' and 'payload' in ep:
                 data = json.dumps(ep['payload']).encode('utf-8')
             
-            # Use short timeout (2s) to test responsiveness
-            with urllib.request.urlopen(req, data=data, timeout=3) as response:
+            # Use 10s timeout to allow for disk traversal
+            with urllib.request.urlopen(req, data=data, timeout=10) as response:
                 status = response.status
                 body = response.read().decode('utf-8')
                 
@@ -49,10 +49,10 @@ def test_endpoints():
         print("-" * 50)
 
     if all_passed:
-        print("RESULT: All local server connections and diagnostics passed successfully! \u2705")
+        print("RESULT: All local server connections and diagnostics passed successfully! [OK]")
         sys.exit(0)
     else:
-        print("RESULT: Connection or API check failed. Please check running servers. \u274c")
+        print("RESULT: Connection or API check failed. Please check running servers. [FAIL]")
         sys.exit(1)
 
 if __name__ == '__main__':

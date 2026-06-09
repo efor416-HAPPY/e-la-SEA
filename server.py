@@ -24,6 +24,58 @@ DOWNLOADS_DIR = os.path.join(WORKSPACE_DIR, 'downloads')
 if not os.path.exists(DOWNLOADS_DIR):
     os.makedirs(DOWNLOADS_DIR)
 
+CACHED_CPU_USAGE = 0
+
+def cpu_monitor_loop():
+    global CACHED_CPU_USAGE
+    while True:
+        try:
+            if platform.system() == "Windows":
+                # Try wmic first as it is generally faster than starting a PowerShell instance
+                cmd = 'wmic cpu get loadpercentage'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=3)
+                if result.returncode == 0:
+                    lines = [line.strip() for line in result.stdout.split('\n') if line.strip()]
+                    if len(lines) > 1 and lines[1].isdigit():
+                        CACHED_CPU_USAGE = int(lines[1])
+                        time.sleep(5)
+                        continue
+                
+                # Fallback to powershell if wmic is not available or fails
+                cmd = 'powershell -Command "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty LoadPercentage"'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and result.stdout.strip().isdigit():
+                    CACHED_CPU_USAGE = int(result.stdout.strip())
+            else:
+                CACHED_CPU_USAGE = 0
+        except Exception:
+            pass
+        time.sleep(5)
+
+cached_maintenance_report = None
+maintenance_lock = threading.Lock()
+is_maintenance_running = False
+
+def run_diagnostics_bg():
+    global cached_maintenance_report, is_maintenance_running
+    with maintenance_lock:
+        if is_maintenance_running:
+            return
+        is_maintenance_running = True
+    
+    try:
+        sys.path.insert(0, os.path.join(WORKSPACE_DIR, 'maintenance'))
+        import self_diagnostics as diag
+        import importlib
+        importlib.reload(diag)
+        report = diag.run_diagnostics()
+        cached_maintenance_report = report
+    except Exception as e:
+        print("Error in background diagnostics:", e)
+    finally:
+        with maintenance_lock:
+            is_maintenance_running = False
+
 # ==========================================================================
 # Self-Protection Firewall Subsystem (IP Filtering, DDoS Limiters)
 # ==========================================================================
@@ -737,17 +789,9 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                 "os_release": platform.release(),
                 "architecture": platform.machine(),
                 "cpu_cores": os.cpu_count(),
-                "cpu_usage": 0,
+                "cpu_usage": CACHED_CPU_USAGE,
                 "node_name": platform.node()
             }
-            if platform.system() == "Windows":
-                try:
-                    cmd = 'powershell -Command "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty LoadPercentage"'
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=2)
-                    if result.returncode == 0:
-                        system_info["cpu_usage"] = int(result.stdout.strip())
-                except Exception:
-                    pass
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
             self.end_headers()
@@ -1126,7 +1170,7 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                 
                 app_cmd = safe_apps.get(target.lower())
                 if app_cmd:
-                    subprocess.Popen(app_cmd)
+                    subprocess.Popen(app_cmd, close_fds=True)
                     is_safe = True
                     message = f"Started {target} successfully"
                 elif target.startswith('http://') or target.startswith('https://'):
@@ -1139,7 +1183,7 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                 elif target.lower() == "vision":
                     python_bin = sys.executable or "python"
                     script_path = os.path.join(WORKSPACE_DIR, 'recognition_utility.py')
-                    subprocess.Popen([python_bin, script_path])
+                    subprocess.Popen([python_bin, script_path], close_fds=True)
                     is_safe = True
                     message = "Started local sensory recognition engine successfully"
                 elif os.path.exists(target):
@@ -1621,11 +1665,16 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
         return "안녕하세요. 아라(ARA)입니다. 로컬 AI 코어가 오프라인 상태이나, 규칙 기반 대체 신경망 모듈을 통해 대화를 지속합니다. 편안한 마음으로 말씀해 주세요. 🌱"
 
     def handle_maintenance_status(self):
+        global cached_maintenance_report
         try:
-            sys.path.insert(0, os.path.join(WORKSPACE_DIR, 'maintenance'))
-            import self_diagnostics as diag
+            # If no cached report yet, do an initial run (only once on first load)
+            if cached_maintenance_report is None:
+                sys.path.insert(0, os.path.join(WORKSPACE_DIR, 'maintenance'))
+                import self_diagnostics as diag
+                cached_maintenance_report = diag.run_diagnostics()
             
-            report = diag.run_diagnostics()
+            # Start background thread to refresh it asynchronously for subsequent queries
+            threading.Thread(target=run_diagnostics_bg, daemon=True).start()
             
             # Read history logs
             logs_file = os.path.join(WORKSPACE_DIR, 'data', 'maintenance_log.json')
@@ -1638,7 +1687,7 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
                     pass
             
             response_data = {
-                "report": report,
+                "report": cached_maintenance_report,
                 "history": history
             }
             
@@ -1647,7 +1696,8 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
         except Exception as e:
-            self.send_error(500, f"Error getting maintenance status: {str(e)}")
+            err_msg = str(e).encode('ascii', errors='ignore').decode('ascii')
+            self.send_error(500, f"Error getting maintenance status: {err_msg}")
 
     def handle_maintenance_repair(self):
         try:
@@ -1755,6 +1805,10 @@ if __name__ == '__main__':
     # Start background scheduler thread on load
     sched_thread = threading.Thread(target=scheduler_loop, daemon=True)
     sched_thread.start()
+
+    # Start CPU monitor thread
+    cpu_thread = threading.Thread(target=cpu_monitor_loop, daemon=True)
+    cpu_thread.start()
 
     os.chdir(WORKSPACE_DIR)
     socketserver.ThreadingTCPServer.allow_reuse_address = True
