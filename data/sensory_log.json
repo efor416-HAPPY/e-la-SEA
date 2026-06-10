@@ -1,9 +1,11 @@
 [
   {
-    "timestamp": "2026-06-09 12:46:40",
+    "timestamp": "2026-06-10 07:01:29",
     "location": "실내 (집안)",
-    "person": "없음",
-    "objects": []
+    "person": "감지됨 (efor416-HAPPY)",
+    "objects": [
+      "person"
+    ]
   },
   {
     "timestamp": "2026-06-06 23:47:24",
