@@ -203,6 +203,60 @@ def add_sensory_log(log: SensoryLog):
     sensory_logs.append(log_entry)
     return {"status": "success"}
 
+# -------------------------------------------------------------------------
+# Cognitive State API (ARA 3.0)
+# -------------------------------------------------------------------------
+
+@app.get("/api/cognitive/state")
+def get_cognitive_state():
+    """Returns the full cognitive state of ARA's brain."""
+    return kernel_instance.get_cognitive_state()
+
+@app.get("/api/cognitive/emotion")
+def get_emotion_state():
+    """Returns ARA's current emotional state."""
+    return kernel_instance.emotion_engine.get_emotional_context()
+
+@app.get("/api/cognitive/thoughts")
+def get_recent_thoughts(limit: int = Query(default=20, le=100)):
+    """Returns recent Thought history from the CognitiveBus."""
+    return kernel_instance.cognitive_bus.get_recent_thoughts(limit=limit)
+
+@app.get("/api/cognitive/memory")
+def get_memory_stats():
+    """Returns 5-layer memory statistics."""
+    return kernel_instance.memory_core.get_cognitive_stats()
+
+@app.get("/api/cognitive/knowledge")
+def query_knowledge(concept: str = Query(default=""), depth: int = Query(default=2, le=5)):
+    """Queries the Knowledge Graph for related concepts."""
+    if not concept:
+        return kernel_instance.knowledge_graph.get_stats()
+    related = kernel_instance.knowledge_graph.query_related(concept, depth=depth)
+    return {"concept": concept, "related": related}
+
+@app.get("/api/cognitive/plans")
+def get_active_plans():
+    """Returns active execution plans."""
+    return {
+        "active": kernel_instance.planner_engine.get_active_plans(),
+        "stats": kernel_instance.planner_engine.get_stats(),
+    }
+
+@app.get("/api/cognitive/agents")
+def get_agents_status():
+    """Returns all registered cognitive agents and their topic subscriptions."""
+    bus = kernel_instance.cognitive_bus
+    stats = bus.get_stats()
+    return {
+        "agents": stats["subscriptions"],
+        "total": stats["agents_registered"],
+        "bus_running": stats["running"],
+        "total_thoughts_published": stats["total_published"],
+        "total_thoughts_delivered": stats["total_delivered"],
+        "total_cascaded": stats["total_cascaded"],
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8080)

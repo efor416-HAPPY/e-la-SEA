@@ -1,32 +1,66 @@
 # -*- coding: utf-8 -*-
 """
-🤖 ARA AI Agent Layer: Chat Agent
-Bridges user dialogue with the ReasoningCore and coordinates chat-related actions via the AgentBus.
+🤖 ARA AI Cognitive Agent: Chat Agent (ARA 3.0)
+Bridges user dialogue with ReasoningCore via CognitiveBus.
+Subscribes to "dialogue" topic and emits "reasoning" Thoughts.
 """
 
-from backend.agents.base_agent import IAgent
-from backend.kernel.message import Message
+from backend.agents.base_cognitive_agent import ICognitiveAgent
+from backend.kernel.message import Message, Thought
+from typing import Optional
 
 
-class ChatAgent(IAgent):
+class ChatAgent(ICognitiveAgent):
     def __init__(self, model="gpt-4"):
+        super().__init__()
         self.model = model
         self.history = []
-        self.kernel = None
-        self.bus = None
 
     def id(self) -> str:
         return "chat"
 
+    def subscribed_topics(self) -> list[str]:
+        return ["dialogue"]
+
     def initialize(self) -> bool:
         return True
 
+    def on_thought(self, thought: Thought) -> Optional[Thought]:
+        """대화 Thought를 수신하여 응답을 생성합니다."""
+        user_msg = thought.content
+        persona = thought.context.get("persona", "friend")
+
+        reply = self.generate_response(user_msg, persona)
+
+        # 응답을 reasoning Thought로 발행 (다른 에이전트도 반응 가능)
+        return thought.derive(
+            source=self.id(),
+            thought_type="reasoning",
+            content=reply,
+            importance=thought.importance,
+            context={"persona": persona, "user_message": user_msg},
+        )
+
     def process(self, message: Message) -> bool:
-        """Processes dialogue generation requests received via the AgentBus."""
+        """Legacy AgentBus dispatch 호환."""
         if message.action == "chat":
             user_msg = message.payload.get("message", "")
             persona = message.payload.get("persona", "friend")
+
             reply = self.generate_response(user_msg, persona)
+
+            # 대화를 CognitiveBus에도 발행 (다른 에이전트 연결)
+            if self.bus:
+                dialogue_thought = Thought(
+                    source=self.id(),
+                    thought_type="dialogue",
+                    content=user_msg,
+                    importance=0.6,
+                    context={"persona": persona, "reply": reply},
+                )
+                # publish로 비동기 전파 (블로킹 안 함)
+                self.bus.publish(dialogue_thought)
+
             if isinstance(message.payload, dict):
                 message.payload["result"] = reply
             return True
@@ -42,17 +76,19 @@ class ChatAgent(IAgent):
             self.history.pop(0)
 
     def generate_response(self, user_message: str, current_persona="friend") -> str:
-        """Delegates cognitive thinking and response generation to the central ReasoningCore."""
+        """Delegates cognitive thinking to the central ReasoningCore."""
         self.add_to_history("user", user_message)
-        
-        # Call the kernel reasoning core
+
         if self.kernel:
             reply = self.kernel.reasoning_core.think(user_message, current_persona)
         else:
-            # Fallback if kernel is not set (for decoupled direct instantiations)
             from backend.kernel.kernel import kernel_instance
             reply = kernel_instance.reasoning_core.think(user_message, current_persona)
-            
+
+        # EmotionEngine이 있으면 응답 톤 조절
+        if self.kernel and hasattr(self.kernel, 'emotion_engine'):
+            reply = self.kernel.emotion_engine.modulate_response(reply)
+
         self.add_to_history("assistant", reply)
         return reply
 

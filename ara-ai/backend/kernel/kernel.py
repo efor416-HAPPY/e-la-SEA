@@ -163,7 +163,7 @@ class AraKernel:
             "ARA 3.0 Cognitive Agent Platform boot sequence initiated."
         )
 
-        # Register default agents (backward compatible imports)
+        # Register core agents
         from backend.agents.memory_agent import memory_agent
         from backend.agents.chat_agent import chat_agent
         from backend.agents.planner_agent import planner_agent
@@ -171,6 +171,19 @@ class AraKernel:
         self.register_agent(memory_agent)
         self.register_agent(chat_agent)
         self.register_agent(planner_agent)
+
+        # Register domain cognitive agents
+        from backend.agents.news_cognitive_agent import news_cognitive_agent
+        from backend.agents.youtube_cognitive_agent import youtube_cognitive_agent
+        from backend.agents.economy_cognitive_agent import economy_cognitive_agent
+        from backend.agents.voice_cognitive_agent import voice_cognitive_agent
+        from backend.agents.reasoning_cognitive_agent import reasoning_cognitive_agent
+
+        self.register_agent(news_cognitive_agent)
+        self.register_agent(youtube_cognitive_agent)
+        self.register_agent(economy_cognitive_agent)
+        self.register_agent(voice_cognitive_agent)
+        self.register_agent(reasoning_cognitive_agent)
 
         # Initialize all registered agents
         for agent_id in self._registered_agent_ids:
