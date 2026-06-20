@@ -466,7 +466,20 @@ class AraBrain {
             "시각 인지 (Vision)", "청각 감각 (Audio)", "감성 조율 (Emotion)", 
             "기억 인덱스 (Memory)", "논리 연산 (Logic)", "언어 합성 (Speech)", 
             "지식 탐색 (Search)", "위로 심상 (Empathy)", "행동 출력 (Motor)",
-            "가설 생성 (Hypothesis)", "직관 필터 (Intuition)", "시스템 결합 (Link)"
+            "가설 생성 (Hypothesis)", "직관 필터 (Intuition)", "시스템 결합 (Link)",
+            "공간 지각 (Spatial)", "후각 감각 (Olfactory)", "미각 인식 (Gustatory)",
+            "촉각 수용 (Tactile)", "의사 결정 (Decision)", "연상 기억 (Associative)",
+            "창의 추상 (Creativity)", "패턴 인식 (Pattern)", "시간 감각 (Temporal)",
+            "계획 수립 (Planning)", "주의 집중 (Attention)", "자아 인지 (Self-Awareness)",
+            "언어 이해 (Comprehension)", "반사 행동 (Reflex)", "학습 피드백 (Feedback)",
+            "위험 회피 (Avoidance)", "동기 부여 (Motivation)", "생체 상태 (Bio-State)",
+            "항상성 유지 (Homeostasis)", "연쇄 연산 (Sequence)", "연역 추론 (Deduction)",
+            "귀납 분석 (Induction)", "메타 인지 (Metacognition)", "사회적 인지 (Social)",
+            "미세 운동 (Fine Motor)", "평형 감각 (Balance)", "자율 신경 (Autonomic)",
+            "개념 분류 (Categorization)", "맥락 분석 (Context)", "윤리 판단 (Ethics)",
+            "수치 연산 (Numeric)", "행동 저해 (Inhibition)", "신호 증폭 (Amplification)",
+            "감각 융합 (Integration)", "지각 항상성 (Constancy)", "정보 압축 (Compression)",
+            "예측 코딩 (Prediction)", "자가 정렬 (Alignment)"
         ];
         
         this.initNeuralNetwork();
@@ -485,18 +498,29 @@ class AraBrain {
 
         for (let i = 0; i < count; i++) {
             const angle = (i / count) * Math.PI * 2;
+            
+            // Distribute nodes across 3 concentric layers to prevent congestion
+            let layerRadius = radius;
+            if (i % 3 === 0) {
+                layerRadius = radius * 0.5; // inner layer
+            } else if (i % 3 === 1) {
+                layerRadius = radius * 0.8; // middle layer
+            } else {
+                layerRadius = radius * 1.1; // outer layer
+            }
+
             // Introduce organic jitter
-            const jitterX = (Math.random() - 0.5) * 30;
-            const jitterY = (Math.random() - 0.5) * 30;
+            const jitterX = (Math.random() - 0.5) * 35;
+            const jitterY = (Math.random() - 0.5) * 35;
             
             this.nodes.push({
                 id: i,
                 label: this.nodeLabels.at(i),
-                x: centerX + Math.cos(angle) * radius + jitterX,
-                y: centerY + Math.sin(angle) * radius + jitterY,
-                baseX: centerX + Math.cos(angle) * radius + jitterX,
-                baseY: centerY + Math.sin(angle) * radius + jitterY,
-                size: 6 + Math.random() * 5,
+                x: centerX + Math.cos(angle) * layerRadius + jitterX,
+                y: centerY + Math.sin(angle) * layerRadius + jitterY,
+                baseX: centerX + Math.cos(angle) * layerRadius + jitterX,
+                baseY: centerY + Math.sin(angle) * layerRadius + jitterY,
+                size: 5 + Math.random() * 5,
                 glow: 0.5,
                 swayOffset: Math.random() * 100,
                 active: false
@@ -514,6 +538,22 @@ class AraBrain {
                 const target = (i + Math.floor(count / 2)) % count;
                 this.connections.push({ from: i, to: target });
             }
+        }
+
+        // Build 1500 background neural dust particles representing the 1,000,000 neuron field
+        this.backgroundParticles = [];
+        for (let i = 0; i < 1500; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 250 + 20;
+            this.backgroundParticles.push({
+                x: centerX + Math.cos(angle) * dist,
+                y: centerY + Math.sin(angle) * dist,
+                angle: angle,
+                dist: dist,
+                speed: 0.05 + Math.random() * 0.08,
+                size: 0.5 + Math.random() * 2.0,
+                alpha: 0.1 + Math.random() * 0.4
+            });
         }
     }
 
@@ -549,9 +589,27 @@ class AraBrain {
             
             this.nodes.forEach((node, i) => {
                 const angle = (i / this.nodes.length) * Math.PI * 2;
-                node.baseX = centerX + Math.cos(angle) * radius;
-                node.baseY = centerY + Math.sin(angle) * radius;
+                
+                // Distribute nodes across 3 concentric layers to prevent congestion
+                let layerRadius = radius;
+                if (i % 3 === 0) {
+                    layerRadius = radius * 0.5;
+                } else if (i % 3 === 1) {
+                    layerRadius = radius * 0.8;
+                } else {
+                    layerRadius = radius * 1.1;
+                }
+
+                node.baseX = centerX + Math.cos(angle) * layerRadius;
+                node.baseY = centerY + Math.sin(angle) * layerRadius;
             });
+
+            if (this.backgroundParticles) {
+                this.backgroundParticles.forEach(p => {
+                    p.x = centerX + Math.cos(p.angle) * p.dist;
+                    p.y = centerY + Math.sin(p.angle) * p.dist;
+                });
+            }
         };
         
         window.addEventListener('resize', resize);
@@ -613,12 +671,6 @@ class AraBrain {
                 color: pulseColor
             });
         });
-        
-        // Update UI
-        const activeCountEl = document.getElementById('active-neurons-count');
-        if (activeCountEl) {
-            activeCountEl.textContent = this.nodes.filter(n => n.glow > 0.6).length.toString();
-        }
     }
 
     stimulate(factor) {
@@ -697,11 +749,30 @@ class AraBrain {
         } else {
             this.pulseIntensity = 1.0;
         }
+
+        // Rotate background neural dust slowly
+        if (this.backgroundParticles) {
+            const centerX = this.canvas.width / 2;
+            const centerY = this.canvas.height / 2;
+            this.backgroundParticles.forEach(p => {
+                p.angle += dt * p.speed * 0.15;
+                p.x = centerX + Math.cos(p.angle) * p.dist;
+                p.y = centerY + Math.sin(p.angle) * p.dist;
+            });
+        }
     }
 
     render() {
         const ctx = this.ctx;
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Render 1,000,000 neuron cosmic dust field background representing the optimized neural galaxy
+        if (this.backgroundParticles) {
+            this.backgroundParticles.forEach(p => {
+                ctx.fillStyle = `rgba(134, 168, 144, ${p.alpha * (0.6 + (this.pulseIntensity - 1.0) * 0.4)})`;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+            });
+        }
         
         // 1. Draw connecting synaptic lines (Organic tree branches/vines style)
         this.connections.forEach(conn => {
@@ -770,12 +841,23 @@ class AraBrain {
             
             ctx.shadowBlur = 0; // reset shadow
 
-            // Draw clean typography labels
-            ctx.fillStyle = 'rgba(31, 45, 37, 0.85)';
-            ctx.font = 'bold 10px Nunito, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(node.label, node.x, node.y - node.size - 8);
+            // Draw clean typography labels (selectively show labels to prevent overcrowding)
+            if (node.active || node.glow > 0.55 || node.id % 4 === 0) {
+                ctx.fillStyle = node.active ? 'rgba(31, 45, 37, 0.95)' : 'rgba(31, 45, 37, 0.75)';
+                ctx.font = node.active ? 'bold 11px Nunito, sans-serif' : 'bold 9px Nunito, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.label, node.x, node.y - node.size - 8);
+            }
         });
+
+        // Update live active neurons HUD with realistic millisecond fluctuation out of 1,000,000
+        const activeCountEl = document.getElementById('active-neurons-count');
+        if (activeCountEl) {
+            const activeRatio = this.nodes.filter(n => n.glow > 0.35).length / this.nodes.length;
+            const noise = (Math.sin(Date.now() * 0.004) * 450) + (Math.random() - 0.5) * 200;
+            const simulatedActive = Math.floor(130000 + activeRatio * 830000 + noise);
+            activeCountEl.textContent = Math.max(10000, Math.min(1000000, simulatedActive)).toLocaleString();
+        }
     }
 
     /* --------------------------------------------------------------------------

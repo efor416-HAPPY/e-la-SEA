@@ -486,13 +486,21 @@ class ERPAgent:
 class AgentKernel:
     """The central core orchestrating the Observe -> Parse -> Embed -> Store -> Reason -> Plan -> Execute -> Learn pipeline."""
     def __init__(self):
-        self.memory_agent = MemoryAgent()
-        self.safety_agent = SafetyAgent(allowed_paths=["./ara_input_data", "./downloads", "./pdf", "./designs"])
-        self.reasoning_agent = ReasoningAgent()
-        self.execution_agent = ExecutionAgent(self.safety_agent, max_workers=8)
+        self.memory_agents = [MemoryAgent() for _ in range(100)]
+        self.safety_agents = [SafetyAgent(allowed_paths=["./ara_input_data", "./downloads", "./pdf", "./designs"]) for _ in range(100)]
+        self.reasoning_agents = [ReasoningAgent() for _ in range(100)]
+        self.execution_agents = [ExecutionAgent(self.safety_agents[i], max_workers=8) for i in range(100)]
         
-        self.mes_agent = MESAgent()
-        self.erp_agent = ERPAgent()
+        self.mes_agents = [MESAgent() for _ in range(100)]
+        self.erp_agents = [ERPAgent() for _ in range(100)]
+
+        # Keep original single attributes for backward compatibility
+        self.memory_agent = self.memory_agents[0]
+        self.safety_agent = self.safety_agents[0]
+        self.reasoning_agent = self.reasoning_agents[0]
+        self.execution_agent = self.execution_agents[0]
+        self.mes_agent = self.mes_agents[0]
+        self.erp_agent = self.erp_agents[0]
         
         self.pipeline_stage = "IDLE"
         self.recent_events = []
@@ -638,14 +646,16 @@ def draw_dashboard(kernel):
     print(f"   ├─ ☀️ Warm Memory (SQLite DB) : {warm:3d} 건")
     print(f"   └─ ❄️ Cold Memory (JSON 아카이브) : {cold:3d} 건\n")
     
-    print(" [🛡️ 에이전트 라이브 상태]")
+    print(" [🛡️ 에이전트 라이브 상태 (각 100개씩 총 600개 에이전트 가동 중)]")
     print("   ├─ FileAgent      : \033[92m감시 작동 중\033[0m (./ara_input_data)")
     print("   ├─ WebAgent       : \033[92mWebSocket 대기 중\033[0m")
-    print("   ├─ MemoryAgent    : \033[92m동작 가능 (SQLite 3계층)\033[0m")
-    print("   ├─ ReasoningAgent : \033[92mReasoner 활성화\033[0m")
-    print("   ├─ PlanningAgent  : \033[92mGoal-to-Action 구조 가동\033[0m")
-    print("   ├─ ExecutionAgent : \033[92mThreadPoolExecutor (max:8)\033[0m")
-    print("   └─ SafetyAgent    : \033[91m보안 통제 게이트 활성화 (Anti-Traversal)\033[0m\n")
+    print("   ├─ MemoryAgent    : \033[92m동작 가능 (SQLite 3계층) (100개)\033[0m")
+    print("   ├─ ReasoningAgent : \033[92mReasoner 활성화 (100개)\033[0m")
+    print("   ├─ PlanningAgent  : \033[92mGoal-to-Action 구조 가동 (100개)\033[0m")
+    print("   ├─ ExecutionAgent : \033[92mThreadPoolExecutor (100개)\033[0m")
+    print("   ├─ SafetyAgent    : \033[91m보안 통제 게이트 활성화 (100개)\033[0m")
+    print("   ├─ MESAgent       : \033[92m생산 실적 동기화 (100개)\033[0m")
+    print("   └─ ERPAgent       : \033[92m재고 실시간 조회 (100개)\033[0m\n")
 
     print(" [📝 실시간 핵심 감사 로그 / 이벤트 (최근 5개)]")
     events = kernel.recent_events[::-1][:5]

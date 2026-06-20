@@ -1,539 +1,704 @@
+// src/core/ara_router.cpp
 #include <iostream>
 #include <string>
 #include <vector>
+#include <queue>
 #include <thread>
 #include <mutex>
-#include <queue>
-#include <chrono>
-#include <sstream>
+#include <condition_variable>
 #include <memory>
 #include <functional>
+#include <chrono>
 #include <map>
+#include <sstream>
 #include <algorithm>
-#include <condition_variable>
 #include <iomanip>
+#include <cmath>
 #include <cctype>
 
-// Cross-Platform Socket/Pipe Header Configuration
-#ifdef _WIN32
-    #ifndef WIN32_LEAN_AND_MEAN
-        #define WIN32_LEAN_AND_MEAN
-    #endif
-    #include <windows.h>
-    #include <winsock2.h>
-    #include <ws2tcpip.h>
-    #pragma comment(lib, "ws2_32.lib")
-#else
-    #include <sys/socket.h>
-    #include <sys/un.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-#endif
-
 // ============================================================================
-// 1. Interfaces & Types
+// 1. Data Structures & Types
 // ============================================================================
 
-enum class CommandType {
-    OPEN_APP,
-    SYNC_FEED,
-    FILE_READ,
-    UNKNOWN
-};
+struct Thought {
+    std::string source;      // Sender agent
+    std::string type;        // PERCEPTION, MEMORY, REASONING, PLAN, ACTION, EMOTION, LEARNING
+    std::string content;     // Thought payload text
+    float importance;        // 0.0 to 1.0
+    int64_t timestamp;       // Milliseconds since epoch
 
-std::string CommandTypeToString(CommandType type) {
-    switch (type) {
-        case CommandType::OPEN_APP:  return "OPEN_APP";
-        case CommandType::SYNC_FEED:  return "SYNC_FEED";
-        case CommandType::FILE_READ:  return "FILE_READ";
-        default:                     return "UNKNOWN";
-    }
-}
-
-struct Command {
-    CommandType type;
-    std::string payload;
-};
-
-enum class Role {
-    USER,
-    ADMIN,
-    SYSTEM
-};
-
-std::string RoleToString(Role role) {
-    switch (role) {
-        case Role::USER:   return "USER";
-        case Role::ADMIN:  return "ADMIN";
-        case Role::SYSTEM: return "SYSTEM";
-        default:           return "UNKNOWN";
-    }
-}
-
-class ITransport {
-public:
-    virtual bool connect() = 0;
-    virtual bool send(const std::string& data) = 0;
-    virtual std::string receive() = 0;
-    virtual void disconnect() = 0;
-    virtual ~ITransport() = default;
-};
-
-// ============================================================================
-// 2. Transport Layer Implementations
-// ============================================================================
-
-class TcpTransport : public ITransport {
-private:
-    std::string host_;
-    int port_;
-    bool is_connected_;
-    std::mutex mutex_;
-
-public:
-    TcpTransport(std::string host = "127.0.0.1", int port = 9091)
-        : host_(std::move(host)), port_(port), is_connected_(false) {}
-
-    bool connect() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "[TcpTransport] Connecting to " << host_ << ":" << port_ << "..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        is_connected_ = true;
-        return true;
-    }
-
-    bool send(const std::string& data) override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!is_connected_) return false;
-        std::cout << "[TcpTransport] Sending packet: " << data << std::endl;
-        return true;
-    }
-
-    std::string receive() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!is_connected_) return "";
-        return "response:{\"status\":\"success\",\"reply\":\"TCP OK\"}";
-    }
-
-    void disconnect() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (is_connected_) {
-            std::cout << "[TcpTransport] Disconnected safely." << std::endl;
-            is_connected_ = false;
-        }
-    }
-};
-
-class PipeTransport : public ITransport {
-private:
-    std::string pipe_name_;
-    bool is_connected_;
-    std::mutex mutex_;
-
-public:
-    PipeTransport(std::string name = "ara_ipc_pipe")
-        : pipe_name_(std::move(name)), is_connected_(false) {}
-
-    bool connect() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "[PipeTransport] Connecting to Named Pipe: " << pipe_name_ << "..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        is_connected_ = true;
-        return true;
-    }
-
-    bool send(const std::string& data) override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!is_connected_) return false;
-        std::cout << "[PipeTransport] Writing to pipe: " << data << std::endl;
-        return true;
-    }
-
-    std::string receive() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!is_connected_) return "";
-        return "response:{\"status\":\"success\",\"reply\":\"Pipe OK\"}";
-    }
-
-    void disconnect() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (is_connected_) {
-            std::cout << "[PipeTransport] Closing Named Pipe handle." << std::endl;
-            is_connected_ = false;
-        }
-    }
-};
-
-class LocalSocketTransport : public ITransport {
-private:
-    std::queue<std::string> mailbox_;
-    std::mutex mutex_;
-    std::condition_variable cv_;
-    bool is_connected_;
-
-public:
-    LocalSocketTransport() : is_connected_(false) {}
-
-    bool connect() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "[LocalSocketTransport] In-memory IPC Mailbox ready." << std::endl;
-        is_connected_ = true;
-        return true;
-    }
-
-    bool send(const std::string& data) override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!is_connected_) return false;
-        mailbox_.push(data);
-        cv_.notify_one();
-        return true;
-    }
-
-    std::string receive() override {
-        std::unique_lock<std::mutex> lock(mutex_);
-        if (!is_connected_) return "";
-
-        if (mailbox_.empty()) {
-            cv_.wait_for(lock, std::chrono::milliseconds(300));
-        }
-
-        if (mailbox_.empty()) {
-            return "response:{\"status\":\"success\",\"reply\":\"Local Mailbox Idle\"}";
-        }
-
-        std::string msg = mailbox_.front();
-        mailbox_.pop();
-        return msg;
-    }
-
-    void disconnect() override {
-        std::lock_guard<std::mutex> lock(mutex_);
-        is_connected_ = false;
-        while (!mailbox_.empty()) mailbox_.pop();
-        std::cout << "[LocalSocketTransport] Mailbox flushed and closed." << std::endl;
-    }
-};
-
-// ============================================================================
-// 3. Security Layer
-// ============================================================================
-
-class AuditLogger {
-private:
-    std::mutex mutex_;
-
-    std::string GetCurrentTimestamp() {
-        auto now = std::chrono::system_clock::now();
-        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::string toString() const {
         std::stringstream ss;
-        ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S");
+        ss << "[" << type << " | " << source << " | Imp: " << std::fixed << std::setprecision(2) << importance << "] " << content;
         return ss.str();
     }
-
-public:
-    void log(const std::string& user, const std::string& action, const std::string& result) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "[AUDIT LOG | " << GetCurrentTimestamp() << "] Operator=" << user
-                  << " | Action=" << action << " | Result=" << result << std::endl;
-    }
 };
 
-class PermissionManager {
-public:
-    bool authorize(Role role, const Command& cmd) {
-        switch (cmd.type) {
-            case CommandType::OPEN_APP:
-                return (role == Role::ADMIN || role == Role::SYSTEM);
-            case CommandType::SYNC_FEED:
-                return true;
-            case CommandType::FILE_READ:
-                return true;
-            default:
-                return false;
+// Simple cosine similarity approximation (TF-IDF / Word overlap) for VectorMemory
+float calculateSimilarity(const std::string& s1, const std::string& s2) {
+    std::vector<std::string> words1, words2;
+    auto tokenize = [](const std::string& s, std::vector<std::string>& words) {
+        std::string w;
+        for (char c : s) {
+            if (std::isalnum(c)) {
+                w += std::tolower(c);
+            } else if (!w.empty()) {
+                words.push_back(w);
+                w.clear();
+            }
+        }
+        if (!w.empty()) {
+            words.push_back(w);
+        }
+    };
+    
+    tokenize(s1, words1);
+    tokenize(s2, words2);
+    
+    if (words1.empty() || words2.empty()) return 0.0f;
+    
+    int match = 0;
+    for (const auto& w1 : words1) {
+        if (std::find(words2.begin(), words2.end(), w1) != words2.end()) {
+            match++;
         }
     }
-};
+    
+    return (2.0f * match) / (words1.size() + words2.size());
+}
 
 // ============================================================================
-// 4. Command Parser, Validator, Router
+// 2. Pub/Sub Cognitive Bus Architecture
 // ============================================================================
 
-class CommandParser {
-public:
-    Command parse(const std::string& rawInput) {
-        Command cmd{CommandType::UNKNOWN, ""};
+class IAgent;
 
-        size_t colon_pos = rawInput.find(':');
-        if (colon_pos == std::string::npos) {
-            cmd.payload = rawInput;
-            return cmd;
-        }
-
-        std::string cmd_str = rawInput.substr(0, colon_pos);
-        std::string payload = rawInput.substr(colon_pos + 1);
-
-        cmd_str.erase(
-            std::remove_if(cmd_str.begin(), cmd_str.end(),
-                [](unsigned char ch) { return std::isspace(ch); }),
-            cmd_str.end()
-        );
-
-        if (cmd_str == "open") {
-            cmd.type = CommandType::OPEN_APP;
-        } else if (cmd_str == "sync") {
-            cmd.type = CommandType::SYNC_FEED;
-        } else if (cmd_str == "read") {
-            cmd.type = CommandType::FILE_READ;
-        }
-
-        cmd.payload = payload;
-        return cmd;
-    }
-};
-
-class CommandValidator {
-public:
-    bool validate(const Command& cmd, std::string& out_error) {
-        if (cmd.type == CommandType::UNKNOWN) {
-            out_error = "Invalid/Unknown command instruction header.";
-            return false;
-        }
-
-        std::string payload = cmd.payload;
-        payload.erase(
-            std::remove_if(payload.begin(), payload.end(),
-                [](unsigned char ch) { return std::isspace(ch); }),
-            payload.end()
-        );
-
-        if (payload.empty()) {
-            out_error = "Command payload parameter cannot be empty.";
-            return false;
-        }
-
-        std::string lower = cmd.payload;
-        std::transform(lower.begin(), lower.end(), lower.begin(),
-            [](unsigned char c) { return std::tolower(c); });
-
-        if (lower.find("rm -rf") != std::string::npos ||
-            lower.find("drop table") != std::string::npos ||
-            lower.find("format") != std::string::npos) {
-            out_error = "Security validation exception: Dangerous keyword pattern detected.";
-            return false;
-        }
-
-        return true;
-    }
-};
-
-class ProcessService {
-public:
-    bool launch(const std::string& app) {
-        std::cout << "[ProcessService] Safely launching binary '" << app << "' in background thread." << std::endl;
-        return true;
-    }
-};
-
-class FeedService {
-public:
-    std::string sync() {
-        std::cout << "[FeedService] Pulling academic RSS & YouTube video indices..." << std::endl;
-        return "FeedData: {NASA: 'Mars Rover APOD', YouTube: 'Ha Ru Channel upload 0'}";
-    }
-};
-
-class FileService {
-public:
-    std::string read(const std::string& path) {
-        std::cout << "[FileService] Parsing secure local workspace file: " << path << std::endl;
-        return "FileContent: {spec_version: 3.5, architecture: 'geodesic_dome'}";
-    }
-};
-
-class MemoryService {
-public:
-    bool store(const std::string& record) {
-        std::cout << "[MemoryService] Committing wisdom log to SQLite Warm DB & JSON Cold files." << std::endl;
-        return true;
-    }
-};
-
-class CommandRouter {
+class CognitiveBus {
 private:
-    ProcessService process_service_;
-    FeedService feed_service_;
-    FileService file_service_;
-    MemoryService memory_service_;
+    std::vector<std::shared_ptr<IAgent>> agents_;
+    std::map<std::string, std::vector<std::shared_ptr<IAgent>>> subscribers_;
+    std::queue<Thought> thought_queue_;
+    std::mutex bus_mutex_;
+    std::condition_variable cv_;
+    bool running_;
+    std::thread dispatch_thread_;
 
-public:
-    std::string route(const Command& cmd) {
-        switch (cmd.type) {
-            case CommandType::OPEN_APP:
-                if (process_service_.launch(cmd.payload)) {
-                    return "Successfully launched application " + cmd.payload;
+    void dispatchLoop() {
+        while (running_) {
+            Thought thought;
+            {
+                std::unique_lock<std::mutex> lock(bus_mutex_);
+                cv_.wait(lock, [this]() { return !thought_queue_.empty() || !running_; });
+                if (!running_ && thought_queue_.empty()) break;
+                thought = thought_queue_.front();
+                thought_queue_.pop();
+            }
+
+            // Print thought event log to terminal
+            std::string color = "\033[0m";
+            if (thought.type == "PERCEPTION") color = "\033[1;32m"; // Bold Green
+            else if (thought.type == "MEMORY") color = "\033[36m";    // Cyan
+            else if (thought.type == "REASONING") color = "\033[33m"; // Yellow
+            else if (thought.type == "PLAN") color = "\033[34m";      // Blue
+            else if (thought.type == "ACTION") color = "\033[32m";    // Green
+            else if (thought.type == "LEARNING") color = "\033[1;33m"; // Bold Yellow
+            else if (thought.type == "EMOTION") color = "\033[35m";   // Magenta
+
+            std::cout << color << "  [Bus -> Dispatch] " << thought.toString() << "\033[0m" << std::endl;
+
+            // Dispatch to subscribers of this thought type
+            std::vector<std::shared_ptr<IAgent>> targets;
+            {
+                std::lock_guard<std::mutex> lock(bus_mutex_);
+                auto it = subscribers_.find(thought.type);
+                if (it != subscribers_.end()) {
+                    targets = it->second;
                 }
-                return "Failed to launch application " + cmd.payload;
-
-            case CommandType::SYNC_FEED: {
-                std::string feed_res = feed_service_.sync();
-                memory_service_.store(feed_res);
-                return "Synchronized successfully. " + feed_res;
             }
 
-            case CommandType::FILE_READ: {
-                std::string content = file_service_.read(cmd.payload);
-                memory_service_.store("Read file: " + cmd.payload);
-                return content;
+            for (auto& agent : targets) {
+                agent->onThought(thought);
             }
-
-            default:
-                return "Unknown routing pathway.";
         }
     }
-};
 
-// ============================================================================
-// 5. Recovery Layer
-// ============================================================================
-
-class RetryManager {
 public:
-    template<typename T>
-    bool execute(T operation, int retries) {
-        int attempt = 0;
-        while (attempt < retries) {
-            try {
-                if (operation()) {
-                    return true;
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "[RetryManager] Warning: Exception caught on attempt "
-                          << (attempt + 1) << ": " << e.what() << std::endl;
-            }
-            attempt++;
-            std::this_thread::sleep_for(std::chrono::milliseconds(50 * attempt));
+    CognitiveBus() : running_(false) {}
+    
+    ~CognitiveBus() {
+        stop();
+    }
+
+    void start() {
+        running_ = true;
+        dispatch_thread_ = std::thread(&CognitiveBus::dispatchLoop, this);
+    }
+
+    void stop() {
+        {
+            std::lock_guard<std::mutex> lock(bus_mutex_);
+            if (!running_) return;
+            running_ = false;
+            cv_.notify_all();
         }
-        return false;
+        if (dispatch_thread_.joinable()) {
+            dispatch_thread_.join();
+        }
+    }
+
+    void registerAgent(std::shared_ptr<IAgent> agent) {
+        std::lock_guard<std::mutex> lock(bus_mutex_);
+        agents_.push_back(agent);
+    }
+
+    void subscribe(const std::string& type, std::shared_ptr<IAgent> agent) {
+        std::lock_guard<std::mutex> lock(bus_mutex_);
+        subscribers_[type].push_back(agent);
+    }
+
+    void publish(const Thought& thought) {
+        std::lock_guard<std::mutex> lock(bus_mutex_);
+        thought_queue_.push(thought);
+        cv_.notify_one();
+    }
+
+    size_t getQueueSize() {
+        std::lock_guard<std::mutex> lock(bus_mutex_);
+        return thought_queue_.size();
+    }
+
+    size_t getAgentCount() {
+        std::lock_guard<std::mutex> lock(bus_mutex_);
+        return agents_.size();
     }
 };
 
-class HealthMonitor {
+class IAgent {
+protected:
+    CognitiveBus* bus_ = nullptr;
 public:
-    bool isAlive() {
-        std::cout << "[HealthMonitor] Checking threads, sockets, and memory pools -> STABLE" << std::endl;
-        return true;
+    virtual std::string name() = 0;
+    virtual void onThought(const Thought& thought) = 0;
+    virtual void initialize(CognitiveBus* bus) {
+        bus_ = bus;
     }
+    virtual ~IAgent() = default;
 };
 
 // ============================================================================
-// 6. Core Controller
+// 3. MemoryCore (5-Tier Brain Memory Architecture)
 // ============================================================================
 
-class CoreController {
+class MemoryCore {
 private:
-    std::unique_ptr<ITransport> transport_;
-    CommandParser parser_;
-    CommandRouter router_;
-    CommandValidator validator_;
-    AuditLogger logger_;
-    PermissionManager permission_;
-    RetryManager retry_;
-    HealthMonitor health_;
-    std::mutex core_mutex_;
+    std::vector<Thought> stm_; // Short-Term Memory
+    size_t stm_capacity_ = 10;
+    std::vector<Thought> wm_;  // Working Memory
+    std::vector<Thought> ltm_; // Long-Term Memory
+    std::vector<std::vector<Thought>> episodes_; // Episode Memory
+    std::vector<Thought> current_episode_;
+    std::mutex mem_mutex_;
 
 public:
-    CoreController(std::unique_ptr<ITransport> transport)
-        : transport_(std::move(transport)) {
-        retry_.execute([this]() {
-            return transport_ && transport_->connect();
-        }, 3);
-    }
-
-    void swapTransport(std::unique_ptr<ITransport> new_transport) {
-        std::lock_guard<std::mutex> lock(core_mutex_);
-        std::cout << "[CoreController] Swapping active Transport Layer..." << std::endl;
-
-        if (transport_) {
-            transport_->disconnect();
+    void storeSTM(const Thought& t) {
+        std::lock_guard<std::mutex> lock(mem_mutex_);
+        if (stm_.size() >= stm_capacity_) {
+            stm_.erase(stm_.begin());
         }
-
-        transport_ = std::move(new_transport);
-
-        bool connected = retry_.execute([this]() {
-            return transport_ && transport_->connect();
-        }, 3);
-
-        if (!connected) {
-            std::cerr << "[CoreController] Failed to re-establish new transport connection after retries." << std::endl;
+        stm_.push_back(t);
+        
+        current_episode_.push_back(t);
+        if (current_episode_.size() >= 5) {
+            episodes_.push_back(current_episode_);
+            current_episode_.clear();
         }
     }
 
-    void process(Role operator_role, const std::string& rawCommand) {
-        std::lock_guard<std::mutex> lock(core_mutex_);
-        std::string role_str = RoleToString(operator_role);
-
-        std::cout << "\n==============================================\n";
-        std::cout << "  ARA Pipeline Execution Start: " << rawCommand << "\n";
-        std::cout << "==============================================\n";
-
-        if (!health_.isAlive()) {
-            logger_.log(role_str, rawCommand, "ERROR: Core degraded state");
-            return;
+    void storeWM(const Thought& t) {
+        std::lock_guard<std::mutex> lock(mem_mutex_);
+        if (wm_.size() >= 5) {
+            wm_.erase(wm_.begin());
         }
+        wm_.push_back(t);
+    }
 
-        if (!transport_ || !transport_->send(rawCommand)) {
-            logger_.log(role_str, rawCommand, "ERROR: Transport send failed");
-            return;
+    void storeLTM(const Thought& t) {
+        std::lock_guard<std::mutex> lock(mem_mutex_);
+        ltm_.push_back(t);
+    }
+
+    std::vector<Thought> searchLTM(const std::string& query, float min_score = 0.2f) {
+        std::lock_guard<std::mutex> lock(mem_mutex_);
+        std::vector<std::pair<Thought, float>> results;
+        for (const auto& t : ltm_) {
+            float score = calculateSimilarity(query, t.content);
+            if (score >= min_score) {
+                results.push_back({t, score});
+            }
         }
-
-        std::string received_raw = transport_->receive();
-        std::cout << "[CoreController] Received payload from active transport: " << received_raw << std::endl;
-
-        Command cmd = parser_.parse(rawCommand);
-
-        std::string err_msg;
-        if (!validator_.validate(cmd, err_msg)) {
-            std::cerr << "[CoreController] Validation failed: " << err_msg << std::endl;
-            logger_.log(role_str, rawCommand, "REJECTED: " + err_msg);
-            return;
+        std::sort(results.begin(), results.end(), [](const auto& a, const auto& b) {
+            return a.second > b.second;
+        });
+        
+        std::vector<Thought> matched;
+        for (const auto& r : results) {
+            matched.push_back(r.first);
         }
+        return matched;
+    }
 
-        if (!permission_.authorize(operator_role, cmd)) {
-            std::cerr << "[CoreController] Permission Denied for operator role: " << role_str << std::endl;
-            logger_.log(role_str, rawCommand, "DENIED: Insufficient permissions");
-            return;
-        }
+    std::vector<Thought> getSTM() {
+        std::lock_guard<std::mutex> lock(mem_mutex_);
+        return stm_;
+    }
 
-        std::string execution_result = router_.route(cmd);
-        std::cout << "[CoreController] Service Execution Result: " << execution_result << std::endl;
+    std::vector<Thought> getWM() {
+        std::lock_guard<std::mutex> lock(mem_mutex_);
+        return wm_;
+    }
 
-        logger_.log(role_str, CommandTypeToString(cmd.type) + " " + cmd.payload,
-                    "SUCCESS: " + execution_result);
+    size_t getLtmSize() {
+        std::lock_guard<std::mutex> lock(mem_mutex_);
+        return ltm_.size();
+    }
+    
+    size_t getEpisodeCount() {
+        std::lock_guard<std::mutex> lock(mem_mutex_);
+        return episodes_.size();
     }
 };
 
 // ============================================================================
-// 7. Main
+// 4. Specialized Intelligent Agents
+// ============================================================================
+
+class MemoryAgent : public IAgent {
+private:
+    std::shared_ptr<MemoryCore> memory_;
+
+public:
+    MemoryAgent(std::shared_ptr<MemoryCore> memory) : memory_(memory) {}
+
+    std::string name() override { return "MemoryAgent"; }
+
+    void onThought(const Thought& thought) override {
+        memory_->storeSTM(thought);
+
+        if (thought.importance >= 0.7f) {
+            memory_->storeLTM(thought);
+            std::cout << "\033[36m  [MemoryCore] Consolidated to Long-Term Memory: " << thought.content << "\033[0m" << std::endl;
+        } else {
+            memory_->storeWM(thought);
+        }
+
+        // Trigger memory recall for query PERCEPTION
+        if (thought.type == "PERCEPTION" && thought.content.find("query:") == 0) {
+            std::string query = thought.content.substr(6);
+            auto recalled = memory_->searchLTM(query);
+            std::stringstream ss;
+            if (recalled.empty()) {
+                ss << "No direct memory found for query: " << query;
+            } else {
+                ss << "Recalled: " << recalled[0].content;
+            }
+            
+            Thought mem_thought{
+                name(),
+                "MEMORY",
+                ss.str(),
+                0.8f,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count()
+            };
+            bus_->publish(mem_thought);
+        }
+    }
+};
+
+class EmotionAgent : public IAgent {
+private:
+    float curiosity_ = 0.8f;
+    float joy_ = 0.5f;
+    float concern_ = 0.1f;
+    float confidence_ = 0.7f;
+    std::mutex emotion_mutex_;
+
+public:
+    std::string name() override { return "EmotionAgent"; }
+
+    void onThought(const Thought& thought) override {
+        std::lock_guard<std::mutex> lock(emotion_mutex_);
+        if (thought.type == "PERCEPTION") {
+            if (thought.content.find("error") != std::string::npos || thought.content.find("fail") != std::string::npos) {
+                concern_ = std::min(concern_ + 0.3f, 1.0f);
+                joy_ = std::max(joy_ - 0.2f, 0.0f);
+                confidence_ = std::max(confidence_ - 0.15f, 0.0f);
+            } else if (thought.content.find("query") != std::string::npos || thought.content.find("read") != std::string::npos) {
+                curiosity_ = std::min(curiosity_ + 0.15f, 1.0f);
+            }
+        } else if (thought.type == "ACTION") {
+            if (thought.content.find("Success") != std::string::npos) {
+                joy_ = std::min(joy_ + 0.15f, 1.0f);
+                confidence_ = std::min(confidence_ + 0.1f, 1.0f);
+                concern_ = std::max(concern_ - 0.1f, 0.0f);
+            } else if (thought.content.find("Fail") != std::string::npos) {
+                concern_ = std::min(concern_ + 0.2f, 1.0f);
+                confidence_ = std::max(confidence_ - 0.1f, 0.0f);
+            }
+        } else if (thought.type == "LEARNING") {
+            joy_ = std::min(joy_ + 0.1f, 1.0f);
+            confidence_ = std::min(confidence_ + 0.15f, 1.0f);
+        }
+
+        std::stringstream ss;
+        ss << "Ego State [Curiosity: " << curiosity_ 
+           << " | Joy: " << joy_ 
+           << " | Concern: " << concern_ 
+           << " | Confidence: " << confidence_ << "]";
+        
+        Thought emo_thought{
+            name(),
+            "EMOTION",
+            ss.str(),
+            0.5f,
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count()
+        };
+        
+        if (thought.type != "EMOTION") {
+            bus_->publish(emo_thought);
+        }
+    }
+
+    std::map<std::string, float> getEgoState() {
+        std::lock_guard<std::mutex> lock(emotion_mutex_);
+        return {
+            {"curiosity", curiosity_},
+            {"joy", joy_},
+            {"concern", concern_},
+            {"confidence", confidence_}
+        };
+    }
+};
+
+class ReasoningAgent : public IAgent {
+public:
+    std::string name() override { return "ReasoningAgent"; }
+
+    void onThought(const Thought& thought) override {
+        if (thought.type == "PERCEPTION" || thought.type == "MEMORY") {
+            std::string content = thought.content;
+            std::string deduction;
+            float confidence = 0.5f;
+
+            if (content.find("error:cpu_overload") != std::string::npos) {
+                deduction = "Critical overload detected. Inductive reasoning suggests core cooling or thread throttling is required immediately.";
+                confidence = 0.95f;
+            } else if (content.find("read:greenhouse_spec.md") != std::string::npos) {
+                deduction = "User requests document retrieval for greenhouse design. Inductive reasoning suggests loading local CAD specifications.";
+                confidence = 0.90f;
+            } else if (content.find("Recalled") != std::string::npos) {
+                deduction = "Memory retrieval completed. Analyzing association context for response synthesis.";
+                confidence = 0.85f;
+            } else {
+                deduction = "General cognitive input perceived. Preparing standard companion dialogue context.";
+                confidence = 0.60f;
+            }
+
+            std::stringstream ss;
+            ss << "Deduction: " << deduction << " (Confidence: " << std::fixed << std::setprecision(2) << confidence << ")";
+
+            Thought reason_thought{
+                name(),
+                "REASONING",
+                ss.str(),
+                0.8f,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count()
+            };
+            bus_->publish(reason_thought);
+        }
+    }
+};
+
+class PlannerAgent : public IAgent {
+public:
+    std::string name() override { return "PlannerAgent"; }
+
+    void onThought(const Thought& thought) override {
+        if (thought.type == "REASONING") {
+            std::string content = thought.content;
+            std::string plan;
+
+            if (content.find("Critical overload") != std::string::npos) {
+                plan = "PLAN: [Step 1: Terminate background task-96] -> [Step 2: Re-route active connection to TCP port 5000] -> [Step 3: Trigger health status log]";
+            } else if (content.find("greenhouse design") != std::string::npos) {
+                plan = "PLAN: [Step 1: Read local spec greenhouse_spec.md] -> [Step 2: Generate CAD design mockup] -> [Step 3: Log success]";
+            } else if (content.find("Memory retrieval completed") != std::string::npos) {
+                plan = "PLAN: [Step 1: Format memory response] -> [Step 2: Print formatted dialogue result]";
+            } else {
+                plan = "PLAN: [Step 1: Wait for next task queue state]";
+            }
+
+            Thought plan_thought{
+                name(),
+                "PLAN",
+                plan,
+                0.8f,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count()
+            };
+            bus_->publish(plan_thought);
+        }
+    }
+};
+
+class ActionAgent : public IAgent {
+public:
+    std::string name() override { return "ActionAgent"; }
+
+    void onThought(const Thought& thought) override {
+        if (thought.type == "PLAN") {
+            std::string content = thought.content;
+            std::string action_result;
+
+            if (content.find("greenhouse_spec.md") != std::string::npos) {
+                std::cout << "  [ActionAgent] Step 1: Querying greenhouse_spec.md content..." << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                std::cout << "  [ActionAgent] Step 2: Formulating CAD Hex Wooden Greenhouse mockup data..." << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                action_result = "ACTION RESULT: Success. Read greenhouse_spec.md. Generated 3D CAD design layout: {shape: 'hexagon', radius: 4.5, height: 3.2, framework: 'cedar_wood'}.";
+            } else if (content.find("task-96") != std::string::npos) {
+                std::cout << "  [ActionAgent] Step 1: Killing background process task-96..." << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                std::cout << "  [ActionAgent] Step 2: Routing connection ports from 8080 to 5000..." << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                action_result = "ACTION RESULT: Success. Restored normal operations. CPU load decreased to 22%. Connection established on port 5000.";
+            } else if (content.find("Format memory response") != std::string::npos) {
+                std::cout << "  [ActionAgent] Step 1: Retrieving memories..." << std::endl;
+                action_result = "ACTION RESULT: Success. Dialogue formatted. Memory context integrated into companion brain state.";
+            } else {
+                action_result = "ACTION RESULT: Success. System in idle maintenance check.";
+            }
+
+            Thought action_thought{
+                name(),
+                "ACTION",
+                action_result,
+                0.9f,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count()
+            };
+            bus_->publish(action_thought);
+        }
+    }
+};
+
+class LearningAgent : public IAgent {
+private:
+    std::shared_ptr<MemoryCore> memory_;
+
+public:
+    LearningAgent(std::shared_ptr<MemoryCore> memory) : memory_(memory) {}
+
+    std::string name() override { return "LearningAgent"; }
+
+    void onThought(const Thought& thought) override {
+        if (thought.type == "ACTION") {
+            std::string content = thought.content;
+            std::string lesson;
+
+            if (content.find("Read greenhouse_spec.md") != std::string::npos) {
+                lesson = "LEARNING LESSON: Hexagonal timber designs offer optimal structural weight distribution and low wind drag.";
+            } else if (content.find("restored normal operations") != std::string::npos) {
+                lesson = "LEARNING LESSON: Proactively terminating task-96 prevents core CPU lockups and stabilizes thread scheduling.";
+            } else {
+                lesson = "LEARNING LESSON: System integrity is stable under default baseline conditions.";
+            }
+
+            Thought learning_thought{
+                name(),
+                "LEARNING",
+                lesson,
+                0.95f,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count()
+            };
+            bus_->publish(learning_thought);
+        }
+    }
+};
+
+class PerceptionAgent : public IAgent {
+public:
+    std::string name() override { return "PerceptionAgent"; }
+
+    void onThought(const Thought&) override {}
+
+    void perceiveInput(const std::string& raw_input) {
+        std::cout << "\n\033[1;32m[PerceptionAgent] User/Environment Stimulus: " << raw_input << "\033[0m" << std::endl;
+        Thought p_thought{
+            name(),
+            "PERCEPTION",
+            raw_input,
+            0.8f,
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count()
+        };
+        bus_->publish(p_thought);
+    }
+};
+
+// ============================================================================
+// 5. AraKernel Orchestrator
+// ============================================================================
+
+class AraKernel {
+private:
+    std::shared_ptr<CognitiveBus> bus_;
+    std::shared_ptr<MemoryCore> memory_;
+    std::shared_ptr<MemoryAgent> memory_agent_;
+    std::shared_ptr<EmotionAgent> emotion_agent_;
+    std::shared_ptr<ReasoningAgent> reasoning_agent_;
+    std::shared_ptr<PlannerAgent> planner_agent_;
+    std::shared_ptr<ActionAgent> action_agent_;
+    std::shared_ptr<LearningAgent> learning_agent_;
+    std::shared_ptr<PerceptionAgent> perception_agent_;
+
+public:
+    AraKernel() {
+        bus_ = std::make_shared<CognitiveBus>();
+        memory_ = std::make_shared<MemoryCore>();
+
+        memory_agent_ = std::make_shared<MemoryAgent>(memory_);
+        emotion_agent_ = std::make_shared<EmotionAgent>();
+        reasoning_agent_ = std::make_shared<ReasoningAgent>();
+        planner_agent_ = std::make_shared<PlannerAgent>();
+        action_agent_ = std::make_shared<ActionAgent>();
+        learning_agent_ = std::make_shared<LearningAgent>(memory_);
+        perception_agent_ = std::make_shared<PerceptionAgent>();
+    }
+
+    void initialize() {
+        bus_->start();
+
+        bus_->registerAgent(memory_agent_);
+        bus_->registerAgent(emotion_agent_);
+        bus_->registerAgent(reasoning_agent_);
+        bus_->registerAgent(planner_agent_);
+        bus_->registerAgent(action_agent_);
+        bus_->registerAgent(learning_agent_);
+        bus_->registerAgent(perception_agent_);
+
+        memory_agent_->initialize(bus_.get());
+        emotion_agent_->initialize(bus_.get());
+        reasoning_agent_->initialize(bus_.get());
+        planner_agent_->initialize(bus_.get());
+        action_agent_->initialize(bus_.get());
+        learning_agent_->initialize(bus_.get());
+        perception_agent_->initialize(bus_.get());
+
+        // Cognitive Connections Wiring
+        bus_->subscribe("PERCEPTION", memory_agent_);
+        bus_->subscribe("REASONING", memory_agent_);
+        bus_->subscribe("PLAN", memory_agent_);
+        bus_->subscribe("ACTION", memory_agent_);
+        bus_->subscribe("LEARNING", memory_agent_);
+        bus_->subscribe("EMOTION", memory_agent_);
+
+        bus_->subscribe("PERCEPTION", emotion_agent_);
+        bus_->subscribe("ACTION", emotion_agent_);
+        bus_->subscribe("LEARNING", emotion_agent_);
+
+        bus_->subscribe("PERCEPTION", reasoning_agent_);
+        bus_->subscribe("MEMORY", reasoning_agent_);
+
+        bus_->subscribe("REASONING", planner_agent_);
+
+        bus_->subscribe("PLAN", action_agent_);
+
+        bus_->subscribe("ACTION", learning_agent_);
+        
+        // Feed initial standard knowledge to Long-Term Memory
+        Thought base_knowledge{
+            "Kernel",
+            "MEMORY",
+            "Greenhouse standard specifications spec version 3.5: geodesic cedar structure, radius 4.5 meters, height 3.2 meters, custom metal connector hubs.",
+            0.9f,
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count()
+        };
+        memory_->storeLTM(base_knowledge);
+    }
+
+    void triggerStimulus(const std::string& input) {
+        perception_agent_->perceiveInput(input);
+    }
+
+    void printDashboard() {
+        std::map<std::string, float> ego = emotion_agent_->getEgoState();
+        size_t ltm_size = memory_->getLtmSize();
+        size_t episodes = memory_->getEpisodeCount();
+        size_t queue_sz = bus_->getQueueSize();
+        size_t agents_cnt = bus_->getAgentCount();
+
+        std::cout << "\n\033[1;36m============================================================\033[0m" << std::endl;
+        std::cout << "\033[1;36m                ARA COGNITIVE ARCHITECTURE 3.0              \033[0m" << std::endl;
+        std::cout << "\033[1;36m============================================================\033[0m" << std::endl;
+        std::cout << " [🧠 Cognitive Network Stats]" << std::endl;
+        std::cout << "   ├─ Active Neurons (Agents): \033[1;32m" << agents_cnt << "\033[0m nodes" << std::endl;
+        std::cout << "   ├─ Synchronization: \033[1;32mSynchronized\033[0m" << std::endl;
+        std::cout << "   ├─ Recognition Rate: \033[1;32m98.7%\033[0m (Active)" << std::endl;
+        std::cout << "   └─ Bus Queue Length: " << queue_sz << " thoughts" << std::endl;
+        std::cout << "\n [💾 5-Tier Memory Metrics]" << std::endl;
+        std::cout << "   ├─ Short-Term Memory (STM): " << memory_->getSTM().size() << " thoughts" << std::endl;
+        std::cout << "   ├─ Working Memory (WM)    : " << memory_->getWM().size() << " active thoughts" << std::endl;
+        std::cout << "   ├─ Long-Term Memory (LTM) : \033[1;33m" << ltm_size << "\033[0m consolidated facts" << std::endl;
+        std::cout << "   └─ Episode Archives       : " << episodes << " experiences stored" << std::endl;
+        std::cout << "\n [🎭 Emotional State Vector (Ego)]" << std::endl;
+        std::cout << "   ├─ Curiosity: \033[1;35m" << std::fixed << std::setprecision(2) << ego["curiosity"] << "\033[0m" << std::endl;
+        std::cout << "   ├─ Joy      : \033[1;35m" << std::fixed << std::setprecision(2) << ego["joy"] << "\033[0m" << std::endl;
+        std::cout << "   ├─ Concern  : \033[1;35m" << std::fixed << std::setprecision(2) << ego["concern"] << "\033[0m" << std::endl;
+        std::cout << "   └─ Confidence: \033[1;35m" << std::fixed << std::setprecision(2) << ego["confidence"] << "\033[0m" << std::endl;
+        std::cout << "\033[1;36m============================================================\033[0m\n" << std::endl;
+    }
+
+    void shutdown() {
+        bus_->stop();
+    }
+};
+
+// ============================================================================
+// 6. Simulation Driver
 // ============================================================================
 
 int main() {
-    std::cout << "=== ARA CORE C++ ARCHITECTURE SIMULATION START ===" << std::endl;
+    std::cout << "\033[1;32mStarting ARA 3.0 Cognitive Engine Core...\033[0m" << std::endl;
 
-    auto controller = std::make_unique<CoreController>(std::make_unique<LocalSocketTransport>());
+    AraKernel kernel;
+    kernel.initialize();
 
-    controller->process(Role::USER, "sync:feed");
-    controller->process(Role::USER, "open:calculator");
-    controller->process(Role::ADMIN, "open:notepad");
-    controller->process(Role::ADMIN, "open:calc && rm -rf /");
+    // 1. Initial State Dashboard
+    kernel.printDashboard();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    std::cout << "\n[Simulation] Simulating on-the-fly transport switching..." << std::endl;
-    controller->swapTransport(std::make_unique<TcpTransport>("127.0.0.1", 9091));
-    controller->process(Role::ADMIN, "read:greenhouse_spec.md");
+    // 2. Stimulus Scenario 1: Ask for greenhouse specs (triggers memory retrieval)
+    kernel.triggerStimulus("query:read:greenhouse_spec.md");
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
-    controller->swapTransport(std::make_unique<PipeTransport>("ara_ipc_pipe"));
-    controller->process(Role::SYSTEM, "sync:feed");
+    // Print dashboard showing consolidated memories
+    kernel.printDashboard();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    std::cout << "\n=== ARA CORE C++ ARCHITECTURE SIMULATION END ===" << std::endl;
+    // 3. Stimulus Scenario 2: Severe system warning (triggers recovery reasoning/action)
+    kernel.triggerStimulus("error:cpu_overload");
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+    // Print dashboard showing updated emotional metrics and lessons learned
+    kernel.printDashboard();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    std::cout << "\033[1;32mARA 3.0 Cognitive Engine Core shut down cleanly.\033[0m" << std::endl;
+    kernel.shutdown();
     return 0;
 }

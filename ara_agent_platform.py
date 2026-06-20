@@ -337,17 +337,19 @@ class SafetyLayer:
 class AgentPlatform:
     """Orchestrates all collectors, validates safety, and indexes standard packets into 3-tier memory."""
     def __init__(self):
-        self.collectors = [
-            YouTubeCollector(channel_id="UC18xqS40OGGyPVI-4sneOEA"),
-            NewsCollector(rss_url="https://www.openculture.com/feed"),
-            ImageCollector(target_dir="./ara_input_data"),
-            PdfCollector(target_dir="./ara_input_data")
-        ]
+        self.collectors = []
+        for _ in range(100):
+            self.collectors.extend([
+                YouTubeCollector(channel_id="UC18xqS40OGGyPVI-4sneOEA"),
+                NewsCollector(rss_url="https://www.openculture.com/feed"),
+                ImageCollector(target_dir="./ara_input_data"),
+                PdfCollector(target_dir="./ara_input_data")
+            ])
         self.safety_layer = SafetyLayer()
         self.memory_agent = MemoryAgent()
         
-        # Background multithreading scheduler pool
-        self.executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="AraPlatformWorker")
+        # Background multithreading scheduler pool - expanded for 400 collectors
+        self.executor = ThreadPoolExecutor(max_workers=400, thread_name_prefix="AraPlatformWorker")
         self.running = False
         self.recent_logs = []
         self.lock = threading.Lock()
@@ -408,11 +410,11 @@ def draw_agent_dashboard(platform):
     print(" 🚀 ARA SUSTAINABLE AGENT PLATFORM 3.5 - MODULAR MODULES")
     print("\033[1m" + "="*65 + "\033[0m\n")
     
-    print(" [📡 액티브 수집 에이전트 목록]")
-    print("   ├─ YouTubeCollector : 유튜브 채널 RSS 자동 감지")
-    print("   ├─ NewsCollector    : Open Culture 학술 뉴스 스크래핑")
-    print("   ├─ ImageCollector   : 로컬 이미지 감지 (OCR/객체인식 메타데이터화)")
-    print("   └─ PdfCollector     : 로컬 PDF 문서 지식 변환 파싱")
+    print(" [📡 액티브 수집 에이전트 목록 (각 100개씩 총 400개 가동 중)]")
+    print("   ├─ YouTubeCollector : 유튜브 채널 RSS 자동 감지 (100개)")
+    print("   ├─ NewsCollector    : Open Culture 학술 뉴스 스크래핑 (100개)")
+    print("   ├─ ImageCollector   : 로컬 이미지 감지 (OCR/객체인식 메타데이터화) (100개)")
+    print("   └─ PdfCollector     : 로컬 PDF 문서 지식 변환 파싱 (100개)")
     print("\n [🔒 Ingestion Safety Layer]")
     print("   ├─ 주민번호/패스워드(PII) 필터링 가드 작동 중")
     print("   └─ SQL/쉘 주입(Command Injection) 검증 가드 작동 중\n")
