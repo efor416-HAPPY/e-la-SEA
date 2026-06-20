@@ -1562,3 +1562,124 @@ header {
     box-shadow: 0 4px 10px var(--border-glow);
 }
 
+/* ==========================================================================
+   Gradient Theme (그라우던트) Overrides for BADA Viewer
+   ========================================================================== */
+[data-theme="gradient"] {
+    --bg-primary: #0b0713;
+    --bg-secondary: #160e25;
+    --bg-glass: rgba(22, 12, 38, 0.45);
+    --border-glass: rgba(168, 85, 247, 0.2);
+    --border-glow: rgba(168, 85, 247, 0.4);
+    
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    
+    --accent-primary: #a855f7;
+    --accent-secondary: #ec4899;
+    --accent-gradient: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f43f5e 100%);
+    --accent-glow: rgba(168, 85, 247, 0.25);
+    
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+}
+
+[data-theme="gradient"] body {
+    background-image: linear-gradient(135deg, rgba(11, 7, 19, 0.96) 0%, rgba(22, 14, 37, 0.9) 45%, rgba(168, 85, 247, 0.15) 100%), url('designs/nature_calendar_bg.png');
+}
+
+[data-theme="gradient"] .ambient-glow {
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, rgba(236, 72, 153, 0) 70%);
+}
+
+[data-theme="gradient"] .logo-icon {
+    background: var(--accent-gradient);
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+}
+
+[data-theme="gradient"] .logo-text h1 {
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+[data-theme="gradient"] .btn-primary {
+    background: var(--accent-gradient);
+    box-shadow: 0 4px 14px rgba(168, 85, 247, 0.4);
+}
+
+[data-theme="gradient"] .btn-primary:hover {
+    box-shadow: 0 6px 18px rgba(236, 72, 153, 0.5), 0 0 10px rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="gradient"] .panel {
+    background: rgba(22, 12, 38, 0.55);
+    backdrop-filter: blur(25px) saturate(160%);
+    -webkit-backdrop-filter: blur(25px) saturate(160%);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="gradient"] .tree-file-item.active {
+    background: rgba(168, 85, 247, 0.12);
+    border-color: rgba(168, 85, 247, 0.35);
+}
+
+[data-theme="gradient"] .viewport-display-area {
+    background: #090412;
+}
+
+[data-theme="gradient"] .viewport-display-area::before {
+    background-image: 
+        linear-gradient(to right, rgba(168, 85, 247, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(168, 85, 247, 0.03) 1px, transparent 1px);
+}
+
+[data-theme="gradient"] .hud-btn:hover {
+    color: #ffffff;
+    background: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="gradient"] .cad-navigation-hud {
+    background: rgba(18, 9, 32, 0.9);
+    border-color: rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="gradient"] .theme-toggle:hover {
+    border-color: #ec4899;
+}
+
+[data-theme="gradient"] input, 
+[data-theme="gradient"] select, 
+[data-theme="gradient"] textarea {
+    background-color: #120722 !important;
+    color: #f8fafc !important;
+    border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+[data-theme="gradient"] .comment-item {
+    background: rgba(168, 85, 247, 0.05);
+    border-color: rgba(168, 85, 247, 0.15);
+}
+
+[data-theme="gradient"] .comment-form {
+    border-top-color: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="gradient"] .btn-comment-submit {
+    background: var(--accent-gradient);
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="gradient"] .btn-comment-submit:hover {
+    box-shadow: 0 6px 16px rgba(236, 72, 153, 0.4);
+}
+
+[data-theme="gradient"] .explorer-tree::-webkit-scrollbar-thumb,
+[data-theme="gradient"] .viewport-display-area::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #a855f7 0%, #ec4899 100%);
+}
+

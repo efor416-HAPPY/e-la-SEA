@@ -56,6 +56,12 @@ const consoleOutput = document.getElementById('console-output');
 
 // Initialize ARA Front-End
 window.addEventListener('DOMContentLoaded', () => {
+    // 0. Initialize Theme
+    const savedTheme = localStorage.getItem('ara_theme') || 'nature';
+    if (savedTheme !== 'nature') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+
     // 1. Initialize Lucide Icons
     lucide.createIcons();
 
@@ -431,18 +437,18 @@ function initBackendConnection() {
     loadWisdomStorage();
     loadOllamaConfig();
     
-    // Set interval to poll CPU load every 5 seconds
+    // Set interval to poll CPU load every 60 seconds (Conserves CPU resource)
     if (window.systemStatsInterval) {
         clearInterval(window.systemStatsInterval);
     }
-    window.systemStatsInterval = setInterval(updateSystemStats, 5000);
+    window.systemStatsInterval = setInterval(updateSystemStats, 60000);
 
-    // Initial load and periodic polling of sensory history (every 4 seconds)
+    // Initial load and periodic polling of sensory history (every 60 seconds)
     loadSensoryHistory();
     if (window.sensoryHistoryInterval) {
         clearInterval(window.sensoryHistoryInterval);
     }
-    window.sensoryHistoryInterval = setInterval(loadSensoryHistory, 4000);
+    window.sensoryHistoryInterval = setInterval(loadSensoryHistory, 60000);
 }
 
 async function checkSchedulerConfig() {
@@ -891,6 +897,24 @@ function sendMessage() {
    Helper & UI State Functions
    -------------------------------------------------------------------------- */
 function setupEventListeners() {
+    // Theme toggle trigger
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'nature';
+            let nextTheme = 'nature';
+            if (currentTheme === 'nature') nextTheme = 'light';
+            else if (currentTheme === 'light') nextTheme = 'gradient';
+            
+            if (nextTheme === 'nature') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', nextTheme);
+            }
+            localStorage.setItem('ara_theme', nextTheme);
+        });
+    }
+
     // Chat triggers
     btnSendMessage.addEventListener('click', sendMessage);
     chatTextInput.addEventListener('keypress', (e) => {
@@ -1873,9 +1897,9 @@ async function initMaintenanceConnection() {
     // 1. Initial status fetch
     await refreshMaintenanceStatus();
     
-    // 2. Start polling status every 15 seconds
+    // 2. Start polling status every 300 seconds (Conserves CPU resource)
     if (maintenancePollingTimer) clearInterval(maintenancePollingTimer);
-    maintenancePollingTimer = setInterval(refreshMaintenanceStatus, 15000);
+    maintenancePollingTimer = setInterval(refreshMaintenanceStatus, 300000);
 }
 
 async function refreshMaintenanceStatus() {

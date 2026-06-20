@@ -1408,3 +1408,243 @@ h3,
 .btn-quick-vision:hover i {
     color: white !important;
 }
+
+/* ==========================================================================
+   Theme Switcher & Gradient Skin Overrides
+   ========================================================================== */
+
+/* Light Theme Variables */
+[data-theme="light"] {
+    --bg-primary: #F8FAFC;
+    --bg-secondary: #F1F5F9;
+    --card-bg: rgba(255, 255, 255, 0.75);
+    --card-border: rgba(226, 232, 240, 0.8);
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --accent-green: #059669;
+    --accent-green-hover: #047857;
+    --accent-sage: #34D399;
+    --accent-sand: #F8FAFC;
+    --accent-sand-dark: #E2E8F0;
+    --accent-soil: #64748B;
+    --accent-active: #047857;
+    --shadow-soft: 0 8px 32px 0 rgba(148, 163, 184, 0.08);
+}
+
+[data-theme="light"] .forest-bg-overlay {
+    background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 50%, #E2E8F0 100%);
+}
+
+[data-theme="light"] .brain-canvas-container {
+    background: radial-gradient(circle at center, #FFFFFF 0%, #F1F5F9 100%);
+    border-color: rgba(226, 232, 240, 0.8);
+}
+
+[data-theme="light"] .camera-viewport-container {
+    background-color: #F1F5F9;
+    border-color: rgba(226, 232, 240, 0.8);
+}
+
+/* Gradient (그라우던트) Theme Variables */
+[data-theme="gradient"] {
+    --bg-primary: #0b0713;
+    --bg-secondary: #160e25;
+    --card-bg: rgba(22, 12, 38, 0.45);
+    --card-border: rgba(168, 85, 247, 0.25);
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --accent-green: #a855f7;
+    --accent-green-hover: #c084fc;
+    --accent-sage: #c084fc;
+    --accent-sand: #180d2d;
+    --accent-sand-dark: #29154a;
+    --accent-soil: #f472b6;
+    --accent-active: #e879f9;
+    --shadow-soft: 0 8px 32px 0 rgba(168, 85, 247, 0.15);
+}
+
+[data-theme="gradient"] body {
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+}
+
+[data-theme="gradient"] .forest-bg-overlay {
+    background: linear-gradient(-45deg, #090514, #180927, #220831, #060c1d, #05050f);
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+}
+
+[data-theme="gradient"] .glass-card {
+    background: var(--card-bg);
+    backdrop-filter: blur(25px) saturate(160%);
+    -webkit-backdrop-filter: blur(25px) saturate(160%);
+    border: 1px solid var(--card-border);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="gradient"] .glass-card:hover {
+    border-color: rgba(168, 85, 247, 0.4);
+    box-shadow: 0 12px 40px 0 rgba(168, 85, 247, 0.15), 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="gradient"] .brain-canvas-container {
+    background: radial-gradient(circle at center, #1b0e35 0%, #0d0617 100%);
+    border-color: rgba(168, 85, 247, 0.25);
+}
+
+[data-theme="gradient"] .camera-viewport-container {
+    background-color: #120b22;
+    border-color: rgba(168, 85, 247, 0.25);
+}
+
+[data-theme="gradient"] .btn-persona {
+    background: rgba(24, 13, 45, 0.4);
+    border-color: rgba(168, 85, 247, 0.15);
+    color: var(--text-secondary);
+}
+
+[data-theme="gradient"] .btn-persona:hover {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: var(--accent-sage);
+    color: var(--text-primary);
+}
+
+[data-theme="gradient"] .btn-persona.active {
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+}
+
+[data-theme="gradient"] .btn-persona.active i {
+    color: white !important;
+}
+
+[data-theme="gradient"] .logo-text h1,
+[data-theme="gradient"] .card-header h2,
+[data-theme="gradient"] .panel-title span,
+[data-theme="gradient"] .section-title h3 {
+    background: linear-gradient(135deg, #f472b6 0%, #c084fc 50%, #818cf8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+}
+
+[data-theme="gradient"] .btn-send,
+[data-theme="gradient"] .btn-search-primary {
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f43f5e 100%);
+    border: none;
+    color: white;
+    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+}
+
+[data-theme="gradient"] .btn-send:hover,
+[data-theme="gradient"] .btn-search-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 6px 20px rgba(236, 72, 153, 0.5), 0 0 10px rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="gradient"] #chat-input-container {
+    background: #180d2d;
+    border-color: rgba(168, 85, 247, 0.3);
+}
+
+[data-theme="gradient"] #chat-text-input {
+    color: var(--text-primary);
+}
+
+[data-theme="gradient"] #web-search-input {
+    background: #180d2d;
+    border-color: rgba(168, 85, 247, 0.3);
+    color: var(--text-primary);
+}
+
+[data-theme="gradient"] .search-results-container {
+    background: #120722;
+    border-color: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="gradient"] .file-explorer-container {
+    background: #120722;
+    border-color: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="gradient"] .file-item:hover {
+    background-color: rgba(168, 85, 247, 0.15);
+}
+
+[data-theme="gradient"] .chat-message.ai .message-bubble {
+    background-color: #1e1236;
+    border-color: rgba(168, 85, 247, 0.25);
+    color: var(--text-primary);
+}
+
+[data-theme="gradient"] .chat-message.user .message-bubble {
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+    color: white;
+}
+
+[data-theme="gradient"] .btn-tool {
+    background: #180d2d;
+    border-color: rgba(168, 85, 247, 0.2);
+    color: var(--text-primary);
+}
+
+[data-theme="gradient"] .btn-tool:hover {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: var(--accent-sage);
+}
+
+[data-theme="gradient"] .btn-tool i {
+    color: var(--accent-sage);
+}
+
+[data-theme="gradient"] ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #a855f7 0%, #ec4899 100%);
+}
+
+[data-theme="gradient"] .wisdom-item {
+    background: #180d2d;
+    border-color: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme="gradient"] .wisdom-item:hover {
+    background: rgba(168, 85, 247, 0.12);
+    border-color: var(--accent-sage);
+}
+
+[data-theme="gradient"] .wisdom-title {
+    color: var(--text-primary);
+}
+
+[data-theme="gradient"] .wisdom-title:hover {
+    color: var(--accent-soil);
+}
+
+[data-theme="gradient"] input, 
+[data-theme="gradient"] select, 
+[data-theme="gradient"] textarea {
+    background-color: #180d2d !important;
+    color: #f8fafc !important;
+    border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+[data-theme="gradient"] .maintenance-history-item {
+    background-color: #180d2d;
+    border-color: rgba(168, 85, 247, 0.25);
+}
+
+[data-theme="gradient"] .maintenance-history-item:hover {
+    border-color: var(--accent-sage);
+}
+
+[data-theme="gradient"] .maintenance-badge-success {
+    background-color: rgba(168, 85, 247, 0.2);
+    color: #e879f9;
+    border-color: rgba(168, 85, 247, 0.4);
+}
+
+[data-theme="gradient"] #interaction-status-bar {
+    background: rgba(168, 85, 247, 0.12);
+}

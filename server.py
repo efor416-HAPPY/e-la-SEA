@@ -38,7 +38,7 @@ def cpu_monitor_loop():
                     lines = [line.strip() for line in result.stdout.split('\n') if line.strip()]
                     if len(lines) > 1 and lines[1].isdigit():
                         CACHED_CPU_USAGE = int(lines[1])
-                        time.sleep(5)
+                        time.sleep(60) # Changed from 5 to 60 to run at lowest performance overhead
                         continue
                 
                 # Fallback to powershell if wmic is not available or fails
@@ -50,7 +50,7 @@ def cpu_monitor_loop():
                 CACHED_CPU_USAGE = 0
         except Exception:
             pass
-        time.sleep(5)
+        time.sleep(60) # Changed from 5 to 60 to run at lowest performance overhead
 
 cached_maintenance_report = None
 maintenance_lock = threading.Lock()
@@ -668,7 +668,7 @@ def scheduler_loop():
             current_date = f"{now.tm_year}-{now.tm_mon:02d}-{now.tm_mday:02d}"
             
             # Target times: 8:00 AM (08:00) and 8:00 PM (20:00)
-            is_target_time = (current_hour == 8 or current_hour == 20) and current_min == 0
+            is_target_time = (current_hour == 8 or current_hour == 20)
             run_key = f"{current_date}-{current_hour}"
             
             if is_target_time and last_run_key != run_key:
@@ -677,7 +677,7 @@ def scheduler_loop():
         except Exception as e:
             print("Error in scheduler loop thread:", e)
             
-        time.sleep(30) # check every 30 seconds
+        time.sleep(600) # Changed from 30 to 600 to run at lowest CPU usage/frequency
 
 # ==========================================================================
 # HTTP Server Request Handler

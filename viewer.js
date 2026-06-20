@@ -496,20 +496,43 @@ function setViewportLoader(active, text = '도면을 분석하고 있습니다..
     viewportLoader.style.display = active ? 'flex' : 'none';
 }
 
-themeToggleBtn?.addEventListener('click', () => {
-    if (viewerState.theme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'light');
-        if (themeIconSun) themeIconSun.style.display = 'none';
-        if (themeIconMoon) themeIconMoon.style.display = 'block';
-        viewerState.theme = 'light';
-        showToast('밝은 테마로 전환되었습니다.', 'info');
-    } else {
+function setTheme(themeName) {
+    viewerState.theme = themeName;
+    if (themeName === 'dark') {
         document.documentElement.removeAttribute('data-theme');
         if (themeIconSun) themeIconSun.style.display = 'block';
         if (themeIconMoon) themeIconMoon.style.display = 'none';
-        viewerState.theme = 'dark';
-        showToast('어두운 테마로 전환되었습니다.', 'info');
+    } else {
+        document.documentElement.setAttribute('data-theme', themeName);
+        if (themeIconSun) themeIconSun.style.display = 'none';
+        if (themeIconMoon) themeIconMoon.style.display = 'block';
     }
+    localStorage.setItem('viewer_theme', themeName);
+    
+    // Update ThreeJS scene if initialized
+    if (threeState.scene) {
+        const isDark = themeName === 'dark';
+        const isGradient = themeName === 'gradient';
+        let bgHex = 0xf1f5f9; // light
+        if (isDark) bgHex = 0x090d16;
+        else if (isGradient) bgHex = 0x090412;
+        threeState.scene.background = new THREE.Color(bgHex);
+    }
+}
+
+themeToggleBtn?.addEventListener('click', () => {
+    let nextTheme = 'dark';
+    if (viewerState.theme === 'dark') nextTheme = 'light';
+    else if (viewerState.theme === 'light') nextTheme = 'gradient';
+    else if (viewerState.theme === 'gradient') nextTheme = 'dark';
+    
+    setTheme(nextTheme);
+    
+    const toastMsg = nextTheme === 'dark' ? '어두운 테마로 전환되었습니다.' : 
+                     nextTheme === 'light' ? '밝은 테마로 전환되었습니다.' : 
+                     '그라디언트 테마로 전환되었습니다.';
+    showToast(toastMsg, 'info');
+    
     // Redraw DXF canvas in case colors changed
     if (dxfState.entities.length > 0) {
         drawDxf();
@@ -1988,6 +2011,7 @@ function searchAutolinks(file) {
    ========================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     bindSoundWidgetListeners();
     const cForm = document.getElementById('commentForm');
     if (cForm) {
