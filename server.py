@@ -1559,6 +1559,96 @@ class AraHandler(http.server.SimpleHTTPRequestHandler):
             persona = data.get("persona", "friend")
             history = data.get("history", [])
             
+            # Voice Memory Intercept Commands
+            user_message_clean = user_message.strip().lower()
+            
+            def save_voice_memory(content):
+                memory_path = os.path.join(DOWNLOADS_DIR, 'user_voice_memory.json')
+                memories = []
+                if os.path.exists(memory_path):
+                    try:
+                        with open(memory_path, 'r', encoding='utf-8') as f:
+                            memories = json.load(f)
+                    except Exception:
+                        memories = []
+                memories.insert(0, {
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "content": content
+                })
+                try:
+                    with open(memory_path, 'w', encoding='utf-8') as f:
+                        json.dump(memories, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    print("Failed to save voice memory:", e)
+
+            def get_voice_memories():
+                memory_path = os.path.join(DOWNLOADS_DIR, 'user_voice_memory.json')
+                if os.path.exists(memory_path):
+                    try:
+                        with open(memory_path, 'r', encoding='utf-8') as f:
+                            return json.load(f)
+                    except Exception:
+                        pass
+                return []
+
+            intercepted = False
+            reply = ""
+            
+            if "기억하고 따라해" in user_message or "따라하고 기억해" in user_message:
+                phrase = "기억하고 따라해" if "기억하고 따라해" in user_message else "따라하고 기억해"
+                idx = user_message.find(phrase)
+                content = user_message[idx + len(phrase):].strip()
+                if content.startswith(':') or content.startswith('：'):
+                    content = content[1:].strip()
+                if not content:
+                    reply = "기억하고 따라 할 문장을 함께 말씀해 주세요. 예: '기억하고 따라해 오늘 참 기분이 좋구나'"
+                else:
+                    save_voice_memory(content)
+                    reply = f"{content}! 말씀하신 그대로 따라 하고, 제 기억 은행에도 소중히 담아 두었습니다. 🌱"
+                intercepted = True
+            elif any(cmd in user_message for cmd in ["기억해줘", "기억해"]):
+                cmd_used = "기억해줘" if "기억해줘" in user_message else "기억해"
+                idx = user_message.find(cmd_used)
+                content = user_message[idx + len(cmd_used):].strip()
+                if content.startswith(':') or content.startswith('：'):
+                    content = content[1:].strip()
+                if not content:
+                    reply = "기억할 내용을 함께 말씀해 주세요. 예: '기억해줘 내일 아침 7시 기상'"
+                else:
+                    save_voice_memory(content)
+                    reply = f"네, 말씀하신 '{content}'(을)를 기억 은행에 잘 저장해 두었습니다. 언제든지 다시 물어보세요! 🌱"
+                intercepted = True
+            elif any(cmd in user_message for cmd in ["따라해줘", "따라해"]):
+                cmd_used = "따라해줘" if "따라해줘" in user_message else "따라해"
+                idx = user_message.find(cmd_used)
+                content = user_message[idx + len(cmd_used):].strip()
+                if content.startswith(':') or content.startswith('：'):
+                    content = content[1:].strip()
+                if not content:
+                    reply = "따라 할 말을 함께 입력해 주세요. 예: '따라해 안녕 아라야'"
+                else:
+                    reply = f"{content}! 🌱"
+                intercepted = True
+            elif any(kw in user_message_clean for kw in ["기억한 거", "기억한 것", "기억해봐", "기억하고 있는", "기억나", "기억하는 거", "기억한거"]):
+                memories = get_voice_memories()
+                if not memories:
+                    reply = "아직 제가 기억하고 있는 대화 내용이 없습니다. '기억해줘 [내용]' 또는 '기억하고 따라해 [내용]'라고 말씀해 주시면 기억해 둘게요. 🌱"
+                else:
+                    latest = memories[0]["content"]
+                    reply = f"이전에 말씀하신 내용을 제 기억 은행에서 찾았습니다: '{latest}'라고 말씀하셨지요. 늘 기억하고 있습니다. 🌱"
+                intercepted = True
+
+            if intercepted:
+                response_data = {
+                    "status": "success",
+                    "reply": reply
+                }
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode('utf-8'))
+                return
+            
             cfg = get_ollama_config()
             
             system_prompts = {

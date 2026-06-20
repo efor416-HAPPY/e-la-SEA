@@ -3,21 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="p:domain_verify" content="870dbb36411859766f66baf60d1db6cf"/>
+    <!-- Pinterest Pixel Base Code -->
+    <script type="text/javascript">
+    !function(e){if(!window.pintrk){window.pintrk=function(){window.pintrk.queue.push(Array.prototype.slice.call(arguments))};var n=window.pintrk;n.queue=[],n.version="3.0";var t=document.createElement("script");t.async=!0,t.src=e;var r=document.getElementsByTagName("script")[0];r.parentNode.insertBefore(t,r)}}("https://s.pinimg.com/ct/core.js");
+    pintrk('load', '597149369250111600');
+    pintrk('load', '549769809660');
+    pintrk('page');
+    </script>
+    <noscript>
+    <img height="1" width="1" style="display:none;" alt="" src="https://ct.pinterest.com/v3/?event=init&tid=597149369250111600&noscript=1" />
+    <img height="1" width="1" style="display:none;" alt="" src="https://ct.pinterest.com/v3/?event=init&tid=549769809660&noscript=1" />
+    </noscript>
+    <!-- End Pinterest Pixel Base Code -->
     <title>아라 (ARA) : 유기적 인공지능 인지 코어 (Organic AI Core Brain)</title>
     <!-- Google Fonts: Lora (Elegant Serif) & Nunito (Organic Rounded Sans) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Nunito:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
-    <!-- Lucide Icons -->
+    <!-- Lucide Icons (Minimalist modern icons) -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- TensorFlow.js and COCO-SSD Model for Vision Recognition -->
+    <!-- CDNs for Document Processing & Conversion -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- TensorFlow.js and COCO-SSD Model -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.2.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
     <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
     <div id="app-container">
-        <!-- BACKGROUND LAYER -->
+        <!-- BACKGROUND LAYER: Natural forest canopy effect -->
         <div class="forest-bg-overlay"></div>
 
         <!-- HEADER: System Title & Status Bar -->
@@ -39,7 +58,7 @@
             </div>
 
             <div class="system-status">
-                <div class="status-item" id="firewall-badge">
+                <div class="status-item" id="firewall-badge" style="background: rgba(61, 102, 78, 0.15); border: 1px solid var(--accent-green); padding: 2px 8px; border-radius: 12px; font-weight: bold; color: #2E513A; font-size: 11px; display: flex; align-items: center; gap: 4px;">
                     <i data-lucide="shield" style="width: 12px; height: 12px; color: var(--accent-green);"></i>
                     <span>방화벽: <strong style="color: var(--accent-green);">보호 중</strong></span>
                 </div>
@@ -56,9 +75,24 @@
                     <span id="conn-text">온라인</span>
                 </div>
             </div>
+            <div id="user-auth-area" class="auth-container" style="display: flex; gap: 8px;">
+                <button id="btn-naver-login" class="btn-naver-login">
+                    <span class="naver-logo">N</span>네이버 로그인
+                </button>
+                <button id="btn-github-login" class="btn-github-login">
+                    <i data-lucide="github" style="width: 14px; height: 14px; color: white;"></i>GitHub 로그인
+                </button>
+                <div id="user-profile-badge" class="profile-badge" style="display: none;">
+                    <img id="user-profile-img" src="" alt="프로필">
+                    <span id="user-nickname">사용자</span>
+                    <button id="btn-logout" class="btn-logout" title="로그아웃">
+                        <i data-lucide="log-out" style="width: 14px; height: 14px;"></i>
+                    </button>
+                </div>
+            </div>
         </header>
 
-        <!-- MAIN DASHBOARD CONTENT -->
+        <!-- MAIN DASHBOARD CONTENT (3-Column Grid) -->
         <main id="dashboard-grid">
             <!-- 1. LEFT COLUMN: Sensory Inputs & Persona Settings -->
             <section id="sensory-panel" class="grid-column">
@@ -103,27 +137,38 @@
                     </div>
                     <div class="recognition-content" style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
                         <div class="recognition-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                            <div class="stat-item-box">
+                            <div class="stat-item-box" style="background: rgba(180, 198, 183, 0.15); padding: 8px; border-radius: var(--border-radius-sm); border: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 4px;">
                                 <span style="font-size: 10px; color: var(--text-secondary);">예상 위치 (Location)</span>
                                 <strong id="rec-location-val" style="font-size: 13px; color: var(--text-primary);">대기 중...</strong>
                             </div>
-                            <div class="stat-item-box">
+                            <div class="stat-item-box" style="background: rgba(180, 198, 183, 0.15); padding: 8px; border-radius: var(--border-radius-sm); border: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 4px;">
                                 <span style="font-size: 10px; color: var(--text-secondary);">인물 감지 (User Mapping)</span>
                                 <strong id="rec-person-val" style="font-size: 13px; color: var(--text-primary);">없음</strong>
                             </div>
                         </div>
-                        <div class="rec-objects-box">
+                        
+                        <div class="rec-objects-box" style="background: rgba(242, 236, 225, 0.3); padding: 8px 12px; border-radius: var(--border-radius-sm); border: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 4px;">
                             <span style="font-size: 10px; color: var(--text-secondary);">감지된 객체 리스트 (Detected Objects)</span>
                             <div id="rec-objects-list" style="font-size: 11px; color: var(--text-primary); font-weight: bold;">--</div>
                         </div>
-                        <div class="mic-trigger-switch" style="display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
-                            <span>소리 감지 시 카메라 자동 켜기 (>30%)</span>
-                            <input type="checkbox" id="chk-sound-auto-camera">
+
+                        <!-- Mic-Trigger Option Switch -->
+                        <div class="mic-trigger-switch" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-top: 1px dashed rgba(180,198,183,0.3); font-size: 11px;">
+                            <span style="color: var(--text-primary); display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="volume-2" style="width: 12px; height: 12px; color: var(--accent-green);"></i>
+                                소리 감지 시 카메라 자동 켜기 (>30%)
+                            </span>
+                            <label class="switch-toggle" style="position: relative; display: inline-block; width: 34px; height: 20px;">
+                                <input type="checkbox" id="chk-sound-auto-camera" style="opacity: 0; width: 0; height: 0;">
+                                <span class="slider-round" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px;"></span>
+                            </label>
                         </div>
+                        
+                        <!-- Sensory History Terminal -->
                         <div class="sensory-history-terminal" style="display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 10px; font-weight: bold; color: var(--text-secondary);">최근 인지 이력 타임라인</span>
-                            <div id="sensory-history-list" style="background: #1F2D25; color: #A9C2B1; font-family: monospace; font-size: 10px; padding: 8px; border-radius: 4px; height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; line-height: 1.3;">
-                                이력 데이터 대기 중...
+                            <span style="font-size: 10px; font-weight: bold; color: var(--text-secondary);">최근 인지 이력 타임라인 (Sensory Timeline)</span>
+                            <div id="sensory-history-list" style="background: #1F2D25; color: #A9C2B1; font-family: monospace; font-size: 10px; padding: 8px; border-radius: var(--border-radius-sm); height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; line-height: 1.3;">
+                                이력 데이터 로딩 중...
                             </div>
                         </div>
                     </div>
@@ -133,7 +178,7 @@
                 <div class="glass-card panel-card" id="card-persona">
                     <div class="card-header">
                         <i data-lucide="users" class="card-header-icon"></i>
-                        <h2>인공지능 페르소나 설정 (AI Persona)</h2>
+                        <h2>인공지능 페르소나 설정 (AI Persona Settings)</h2>
                     </div>
                     <div class="persona-grid">
                         <button class="btn-persona active" id="btn-persona-friend" data-persona="friend">
@@ -194,15 +239,15 @@
                             <i data-lucide="brain-circuit" class="card-header-icon" style="color: var(--accent-green);"></i>
                             <h2 style="font-size: 14px; margin: 0;">아라 (ARA) 지혜 저장소 (Wisdom Storage)</h2>
                         </div>
-                        <span class="wisdom-count-badge">지혜: <span id="wisdom-total-count">0</span>개</span>
+                        <span class="wisdom-count-badge" style="background: var(--accent-green); color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold;">지혜: <span id="wisdom-total-count">0</span>개</span>
                     </div>
-                    <div class="wisdom-list-container" id="wisdom-list" style="padding: 12px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
+                    <div class="wisdom-list-container" id="wisdom-list" style="padding: 12px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px; font-size: 11px; max-height: 220px;">
                         <div style="text-align: center; color: var(--text-secondary); font-style: italic; margin-top: 20px;">축적된 지혜 신호 대기 중...</div>
                     </div>
                 </div>
             </section>
 
-            <!-- 3. RIGHT COLUMN: Interactive Dialogue -->
+            <!-- 3. RIGHT COLUMN: Interactive Dialogue & Log Workspace -->
             <section id="interaction-panel" class="grid-column">
                 <div class="glass-card panel-card" id="card-chat">
                     <div class="card-header">
@@ -240,7 +285,7 @@
             </section>
         </main>
 
-        <!-- BOTTOM AREA: Knowledge Base -->
+        <!-- BOTTOM AREA: Knowledge Base (Local Files & Web Information Search) -->
         <footer id="knowledge-base-panel" class="glass-card">
             <div class="knowledge-grid">
                 <!-- A. Local File Explorer -->
@@ -275,8 +320,37 @@
                             <i data-lucide="search"></i> 검색
                         </button>
                     </div>
+                    <div class="search-shortcuts" style="margin-top: 8px; margin-bottom: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button id="btn-shortcut-openculture" class="btn-search-secondary" style="font-size: 11px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--accent-sage); background: rgba(180, 198, 183, 0.1); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: bold; transition: background 0.2s;">
+                            <i data-lucide="book-open" style="width: 12px; height: 12px;"></i>
+                            <span>오픈컬처 피드 (Alt+O)</span>
+                        </button>
+                        <button id="btn-shortcut-pinterest" class="btn-search-secondary" style="font-size: 11px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--accent-sage); background: rgba(180, 198, 183, 0.1); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: bold; transition: background 0.2s;">
+                            <i data-lucide="pin" style="width: 12px; height: 12px;"></i>
+                            <span>핀터레스트 피드 (Alt+P)</span>
+                        </button>
+                        <button id="btn-shortcut-naverblog" class="btn-search-secondary" style="font-size: 11px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--accent-sage); background: rgba(180, 198, 183, 0.1); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: bold; transition: background 0.2s;">
+                            <span class="naver-logo" style="width: 12px; height: 12px; font-size: 8px; line-height: 12px; padding: 0; background-color: #03C75A; color: white;">N</span>
+                            <span>네이버 블로그 피드 (Alt+B)</span>
+                        </button>
+                        <button id="btn-shortcut-youtube" class="btn-search-secondary" style="font-size: 11px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--accent-sage); background: rgba(180, 198, 183, 0.1); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: bold; transition: background 0.2s;">
+                            <i data-lucide="youtube" style="width: 12px; height: 12px; color: #FF0000;"></i>
+                            <span>유튜브 피드 (Alt+Y)</span>
+                        </button>
+                    </div>
                     <div id="web-search-results" class="search-results-container">
                         <div class="search-placeholder-text">인터넷 학술 정보 및 연구 방향 검색 결과가 여기에 표시됩니다.</div>
+                    </div>
+                    <!-- ARA Daily Scheduler Controller -->
+                    <div class="scheduler-sync-controls" style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; background: rgba(180, 198, 183, 0.12); padding: 8px 12px; border-radius: var(--border-radius-sm); border: 1px solid rgba(180, 198, 183, 0.25);">
+                        <div style="font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                            <i data-lucide="clock" style="width: 12px; height: 12px;"></i>
+                            <span>매일 오전/오후 8:00 수집 (보존 30일)</span>
+                        </div>
+                        <button id="btn-sync-now" class="btn-tool" style="padding: 4px 10px; margin: 0; background: var(--accent-green); color: white; border: none; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; border-radius: var(--border-radius-sm);">
+                            <i data-lucide="refresh-cw" style="width: 12px; height: 12px; color: white;"></i>
+                            <span id="sync-btn-text">동기화 수집</span>
+                        </button>
                     </div>
                 </div>
 
@@ -291,13 +365,25 @@
                             <i data-lucide="file-text"></i>
                             <span>메모장 실행</span>
                         </button>
-                        <button class="btn-tool" data-target="calc">
+                        <button class="btn-tool" data-target="calculator">
                             <i data-lucide="calculator"></i>
                             <span>계산기 실행</span>
                         </button>
-                        <button class="btn-tool" data-target="mspaint">
-                            <i data-lucide="image"></i>
-                            <span>그림판 실행</span>
+                        <button class="btn-tool" data-target="explorer">
+                            <i data-lucide="folder"></i>
+                            <span>탐색기 열기</span>
+                        </button>
+                        <button class="btn-tool btn-quick-vision" data-target="vision" style="background: var(--accent-sage); color: var(--text-primary); font-weight: bold; border: 1px solid var(--accent-green);">
+                            <i data-lucide="scan-eye"></i>
+                            <span>로컬 인지엔진 실행</span>
+                        </button>
+                        <button class="btn-tool" data-target="http://localhost:8080/viewer.html">
+                            <i data-lucide="eye"></i>
+                            <span>BADA 도면 뷰어</span>
+                        </button>
+                        <button class="btn-tool" data-target="https://scholar.google.co.kr">
+                            <i data-lucide="graduation-cap"></i>
+                            <span>구글 학술검색</span>
                         </button>
                     </div>
                     <div class="quick-launch-console">
@@ -307,9 +393,262 @@
                 </div>
             </div>
         </footer>
+
+        <!-- NAVER SEARCH ADVISOR PANEL -->
+        <section id="naver-searchadvisor-panel" class="glass-card" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+            <div class="searchadvisor-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="title-area" style="display: flex; align-items: center; gap: 8px;">
+                    <span class="naver-logo" style="background-color: #03C75A; color: white;">N</span>
+                    <h2 style="font-size: 16px; color: var(--accent-green); margin: 0;">네이버 서치어드바이저 제휴 API 연동 (Crawl Request)</h2>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="btn-toggle-advisor-guide" class="btn-tool" style="margin: 0; padding: 6px 12px; font-size: 11px; display: flex; align-items: center; gap: 4px;">
+                        <i data-lucide="help-circle" style="width: 12px; height: 12px; color: var(--accent-soil);"></i> 연동 체크리스트
+                    </button>
+                    <button id="btn-toggle-advisor-config" class="btn-tool" style="margin: 0; padding: 6px 12px; font-size: 11px;">
+                        <i data-lucide="settings" style="width: 12px; height: 12px;"></i> API 설정
+                    </button>
+                </div>
+            </div>
+
+            <!-- Checklist Guide Section (Collapsible, Hidden by default) -->
+            <div id="searchadvisor-checklist-section" class="advisor-config-box" style="display: none; background: rgba(242, 236, 225, 0.45); padding: 16px; border-radius: var(--border-radius-md); border: 1px solid rgba(180, 198, 183, 0.35); flex-direction: column; gap: 12px;">
+                <div style="font-size: 12px; font-weight: bold; color: var(--accent-soil); display: flex; align-items: center; gap: 6px;">
+                    <i data-lucide="help-circle" style="width: 14px; height: 14px; color: var(--accent-soil);"></i>
+                    <span>연동 오류 방지 및 에러 해결을 위한 필수 체크리스트</span>
+                </div>
+                <ul style="font-size: 11px; margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; line-height: 1.5; color: var(--text-primary);">
+                    <li>
+                        <strong>소유확인된 도메인과 완벽한 일치 여부 (가장 흔한 실수)</strong><br>
+                        서치어드바이저 웹마스터 도구에 소유 확인을 완료한 대표 사이트 주소와 API 요청 URL이 스키마(http/https) 및 www 유무까지 완벽하게 일치해야 합니다.<br>
+                        <span style="color: #c2635b;">- 올바른 예: <code>https://your-site.com/subpage</code> (등록 주소가 <code>https://your-site.com</code>인 경우)</span><br>
+                        <span style="color: #c2635b;">- 잘못된 예: <code>https://www.your-site.com/subpage</code> (www 누락/추가 시 다른 사이트로 인식)</span>
+                    </li>
+                    <li>
+                        <strong>Access Token 만료 및 오타/공백 확인</strong><br>
+                        발급받은 토큰이 유효한지 확인하고 복사/붙여넣기 시 공백이나 누락된 문자가 없어야 합니다. 필요시 웹마스터 도구 설정에서 토큰을 재발급받아 적용해 보세요.
+                    </li>
+                    <li>
+                        <strong>리다이렉트(Redirect) 유무</strong><br>
+                        수집을 요청하는 URL은 브라우저에서 최종적으로 열리는 실제 랜딩 페이지여야 합니다. 해당 URL이 다른 페이지로 강제 이동(Redirect)되도록 설정되어 있으면 수집 요청이 실패로 처리됩니다.
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Configuration Section (Hidden by default) -->
+            <div id="searchadvisor-config-section" class="advisor-config-box" style="display: none; background: rgba(180, 198, 183, 0.1); padding: 16px; border-radius: var(--border-radius-md); border: 1px solid rgba(180, 198, 183, 0.25);">
+                <div class="form-row" style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 6px;">
+                        <label for="advisor-token" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">Search Advisor Access Token (Bearer)</label>
+                        <input type="password" id="advisor-token" placeholder="AAAAO... (네이버 서치어드바이저 발급 인증키)" style="border: 1px solid rgba(180, 198, 183, 0.5); border-radius: var(--border-radius-sm); padding: 8px; font-size: 12px; outline: none; background: white;">
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px;">
+                        <label for="advisor-site-url" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">제휴 사이트 대표 URL</label>
+                        <input type="url" id="advisor-site-url" placeholder="http://www.your-site.com" style="border: 1px solid rgba(180, 198, 183, 0.5); border-radius: var(--border-radius-sm); padding: 8px; font-size: 12px; outline: none; background: white;">
+                    </div>
+                    <button id="btn-save-advisor-config" class="btn-search-primary" style="padding: 8px 16px; font-size: 12px; height: 34px;">설정 저장</button>
+                </div>
+            </div>
+
+            <div class="searchadvisor-grid" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;">
+                <!-- Left Area: URL inputs -->
+                <div class="submit-form-area" style="display: flex; flex-direction: column; gap: 12px;">
+                    <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+                        <label for="advisor-urls-input" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">수집/삭제 대상 URL 입력 (한 줄에 하나씩 입력, 로컬 파일 경로는 대표 URL로 자동 치환됨)</label>
+                        <textarea id="advisor-urls-input" placeholder="예:&#13;http://www.your-site.com/article-1&#13;index.html&#13;viewer.html" rows="4" style="border: 1px solid rgba(180, 198, 183, 0.5); border-radius: var(--border-radius-md); padding: 10px; font-size: 12px; font-family: monospace; outline: none; background: white; resize: vertical;"></textarea>
+                    </div>
+                    <div class="form-row" style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="form-group" style="flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px;">
+                            <label for="advisor-action-type" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">작업 유형</label>
+                            <select id="advisor-action-type" style="border: 1px solid rgba(180, 198, 183, 0.5); border-radius: var(--border-radius-sm); padding: 8px; font-size: 12px; outline: none; background: white; cursor: pointer;">
+                                <option value="update">수집 요청 (update)</option>
+                                <option value="delete">색인 삭제 (delete)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="btn-verify-advisor-urls" class="btn-tool" style="padding: 8px 14px; font-size: 12px;">
+                                <i data-lucide="check-square" style="width: 13px; height: 13px; margin-right: 4px;"></i>구문 검증 (Verify)
+                            </button>
+                            <button id="btn-submit-advisor-urls" class="btn-search-primary" style="padding: 8px 14px; font-size: 12px;">
+                                <i data-lucide="send" style="width: 13px; height: 13px; margin-right: 4px;"></i>제휴 수집 제출 (Submit)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Area: Console Output -->
+                <div class="advisor-console-area" style="display: flex; flex-direction: column; gap: 6px;">
+                    <span class="console-title" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">API 응답 및 검증 로그</span>
+                    <div id="advisor-console-log" style="background-color: #1F2D25; color: #A9C2B1; font-family: 'Courier New', Courier, monospace; padding: 12px; border-radius: var(--border-radius-md); font-size: 11px; overflow-y: auto; flex-grow: 1; min-height: 120px; white-space: pre-wrap;">대기 중...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- AUTONOMOUS MAINTENANCE & SELF-HEALING PANEL -->
+        <section id="maintenance-panel" class="glass-card" style="padding: 20px; display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
+            <div class="maintenance-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="title-area" style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="shield-check" class="card-header-icon" style="color: var(--accent-green);"></i>
+                    <h2 style="font-size: 16px; color: var(--accent-green); margin: 0;">자가 진단 & 자율 복구 코어 (Autonomous Diagnostics & Self-Healing)</h2>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div id="maintenance-health-status" style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;">
+                        <span class="status-dot online" id="maintenance-status-dot"></span>
+                        <span id="maintenance-status-text">건강함 (Healthy)</span>
+                    </div>
+                    <button id="btn-refresh-diagnose" class="btn-tool" style="margin: 0; padding: 6px 12px; font-size: 11px; display: flex; align-items: center; gap: 4px;">
+                        <i data-lucide="refresh-cw" style="width: 12px; height: 12px;"></i> 진단 새로고침
+                    </button>
+                </div>
+            </div>
+
+            <div class="maintenance-grid" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;">
+                <!-- Left Area: Diagnostic status & feedback repair -->
+                <div class="maintenance-control-area" style="display: flex; flex-direction: column; gap: 16px;">
+                    <!-- Diagnostics Report Summary -->
+                    <div class="diagnose-summary-box" style="background: rgba(180, 198, 183, 0.1); padding: 14px 18px; border-radius: var(--border-radius-md); border: 1px solid rgba(180, 198, 183, 0.25); display: flex; flex-direction: column; gap: 10px;">
+                        <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">실시간 무결성 및 구문 상태:</span>
+                        <div class="diagnose-items" style="display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px dashed rgba(180,198,183,0.3);">
+                                <span>1. 프로젝트 구문 컴파일 테스트 (Syntax Check)</span>
+                                <span id="syntax-status-badge" style="background: #3D664E; color: white; padding: 2px 8px; border-radius: 12px; font-weight: bold;">정상</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px dashed rgba(180,198,183,0.3);">
+                                <span>2. 시스템 무결성 검증 (verify_integrity.ps1)</span>
+                                <span id="integrity-status-badge" style="background: #3D664E; color: white; padding: 2px 8px; border-radius: 12px; font-weight: bold;">정상</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">
+                                <span>최근 진단 수행 시간:</span>
+                                <span id="last-diagnose-time" style="color: var(--text-secondary);">대기 중</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Repair Form -->
+                    <div class="repair-form-box" style="display: flex; flex-direction: column; gap: 10px;">
+                        <div class="form-group" style="display: flex; flex-direction: column; gap: 6px;">
+                            <label for="repair-feedback-input" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">자가 치유 / 수동 복구 피드백 입력</label>
+                            <div style="font-size: 10px; color: var(--accent-soil); margin-bottom: 2px; line-height: 1.4;">
+                                * 인공지능에게 전달할 버그 수정, 파일 최적화 혹은 정리 요청을 파일명과 함께 기입하십시오.<br>
+                                예) <code>app.js 파일의 XSS 취약성 및 대시보드 새로고침 지연 오류 수정 요청</code>
+                            </div>
+                            <textarea id="repair-feedback-input" placeholder="수정을 희망하는 파일명과 구체적인 피드백을 적어주세요..." rows="3" style="border: 1px solid rgba(180, 198, 183, 0.5); border-radius: var(--border-radius-md); padding: 10px; font-size: 12px; outline: none; background: white; resize: vertical;"></textarea>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div style="font-size: 10px; color: var(--text-secondary);">
+                                ※ <strong>안전 장치 작동</strong>: 수정 전 백업 생성 및 빌드 검증을 거치며, 검증 실패 시 100% 롤백됩니다.
+                            </div>
+                            <button id="btn-trigger-repair" class="btn-search-primary" style="padding: 8px 16px; font-size: 12px; display: flex; align-items: center; gap: 6px; margin: 0; background: var(--accent-green); color: white; border: none; font-weight: bold; cursor: pointer;">
+                                <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i> 자율 복구 실행
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Area: Console Output & Repair History Logs -->
+                <div class="maintenance-logs-area" style="display: grid; grid-template-rows: 1fr 1fr; gap: 12px; height: 320px;">
+                    <!-- Log Console -->
+                    <div style="display: flex; flex-direction: column; gap: 4px; overflow: hidden;">
+                        <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between;">
+                            <span>진단 및 복구 콘솔 로그 (Terminal Output)</span>
+                            <span id="repair-running-indicator" style="display: none; color: var(--accent-green); font-size: 10px; font-weight: bold; animation: softGlowPulse 1.5s infinite ease-in-out;">● 복구 진행 중...</span>
+                        </span>
+                        <div id="maintenance-console-log" style="background-color: #1F2D25; color: #A9C2B1; font-family: 'Courier New', Courier, monospace; padding: 10px; border-radius: var(--border-radius-md); font-size: 11px; overflow-y: auto; flex-grow: 1; white-space: pre-wrap; line-height: 1.4;">대기 중...</div>
+                    </div>
+
+                    <!-- History Timeline -->
+                    <div style="display: flex; flex-direction: column; gap: 4px; overflow: hidden;">
+                        <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">최근 복구 이력 (Self-Healing History Timeline)</span>
+                        <div id="maintenance-history-list" style="background: rgba(242, 236, 225, 0.4); border: 1px solid var(--card-border); padding: 8px; border-radius: var(--border-radius-md); font-size: 11px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 8px;">
+                            <div style="text-align: center; color: var(--text-secondary); font-style: italic; margin-top: 15px;">이력 데이터 대기 중...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- LOCAL AI CORE SETTINGS & SETUP GUIDE PANEL -->
+        <section id="local-ai-panel" class="glass-card" style="padding: 20px; display: flex; flex-direction: column; gap: 16px; margin-top: 20px;">
+            <div class="local-ai-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="title-area" style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="cpu" class="card-header-icon" style="color: var(--accent-green);"></i>
+                    <h2 style="font-size: 16px; color: var(--accent-green); margin: 0;">로컬 인공지능 코어 설정 & 설치 가이드 (Local AI Core)</h2>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div id="ollama-conn-status" style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;">
+                        <span class="status-dot offline" id="ollama-status-dot"></span>
+                        <span id="ollama-status-text">오프라인</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="local-ai-grid" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;">
+                <!-- Left Area: Configurations -->
+                <div class="local-ai-config-area" style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="background: rgba(180, 198, 183, 0.1); padding: 16px; border-radius: var(--border-radius-md); border: 1px solid rgba(180, 198, 183, 0.25);">
+                        <div class="form-row" style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+                            <div class="form-group" style="flex: 1.2; min-width: 200px; display: flex; flex-direction: column; gap: 6px;">
+                                <label for="ollama-url-input" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">Ollama API 서버 주소</label>
+                                <input type="url" id="ollama-url-input" value="http://localhost:11434" style="border: 1px solid rgba(180, 198, 183, 0.5); border-radius: var(--border-radius-sm); padding: 8px; font-size: 12px; outline: none; background: white;">
+                            </div>
+                            <div class="form-group" style="flex: 1.5; min-width: 200px; display: flex; flex-direction: column; gap: 6px;">
+                                <label for="ollama-model-select" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">사용할 로컬 AI 모델</label>
+                                <div style="display: flex; gap: 6px;">
+                                    <select id="ollama-model-select" style="flex-grow: 1; border: 1px solid rgba(180, 198, 183, 0.5); border-radius: var(--border-radius-sm); padding: 8px; font-size: 12px; outline: none; background: white; cursor: pointer;">
+                                        <option value="gemma2:2b">gemma2:2b (기본 추천)</option>
+                                    </select>
+                                    <input type="text" id="ollama-model-custom" placeholder="직접 입력" style="display: none; width: 100px; border: 1px solid rgba(180, 198, 183, 0.5); border-radius: var(--border-radius-sm); padding: 8px; font-size: 12px; outline: none; background: white;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-row" style="margin-top: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                            <label class="checkbox-container" style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: bold; color: var(--text-primary); cursor: pointer;">
+                                <input type="checkbox" id="ollama-enable-checkbox" style="width: 16px; height: 16px; accent-color: var(--accent-green); cursor: pointer;">
+                                <span>로컬 AI 대화 & 리포트 요약 활성화 (Ollama Active)</span>
+                            </label>
+                            
+                            <div style="display: flex; gap: 8px;">
+                                <button id="btn-test-ollama" class="btn-tool" style="padding: 8px 14px; font-size: 12px; display: flex; align-items: center; gap: 4px; margin: 0; background: var(--accent-sand); border: 1px solid var(--accent-sage); border-radius: var(--border-radius-sm); cursor: pointer; color: var(--text-primary); font-weight: bold;">
+                                    <i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i>연동 상태 테스트
+                                </button>
+                                <button id="btn-save-ollama-config" class="btn-search-primary" style="padding: 8px 16px; font-size: 12px; height: 32px; margin: 0; background: var(--accent-green); color: white; border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-weight: bold;">설정 저장</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Area: Step-by-Step Installation Guide -->
+                <div class="local-ai-guide-area" style="display: flex; flex-direction: column; gap: 10px; background: rgba(242, 236, 225, 0.4); padding: 16px; border-radius: var(--border-radius-md); border: 1px solid var(--card-border);">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--accent-soil); display: flex; align-items: center; gap: 4px;">
+                        <i data-lucide="book-open" style="width: 14px; height: 14px;"></i> 자체 로컬 AI 설치 및 실행 가이드
+                    </span>
+                    <div style="font-size: 11px; line-height: 1.6; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px;">
+                        <div>
+                            <strong>1. Ollama AI 엔진 설치 (Windows)</strong><br>
+                            명령 프롬프트(CMD)나 PowerShell을 열고 아래 명령어를 입력해 간단히 설치합니다.
+                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                                <code id="install-cmd-code" style="flex-grow: 1; background: #FAFBF9; border: 1px solid rgba(180, 198, 183, 0.4); padding: 4px 8px; border-radius: 4px; font-family: monospace;">winget install Ollama.Ollama</code>
+                                <button id="btn-copy-install-cmd" style="padding: 4px 8px; font-size: 9px; cursor: pointer; border: 1px solid var(--accent-sage); background: white; border-radius: 4px; font-weight: bold;">복사</button>
+                            </div>
+                            <span style="font-size: 10px; opacity: 0.8;">※ 수동 다운로드: <a href="https://ollama.com/download/windows" target="_blank" style="color: var(--accent-green); text-decoration: underline;">ollama.com/download</a></span>
+                        </div>
+                        <div>
+                            <strong>2. 인공지능 모델 다운로드 및 구동</strong><br>
+                            터미널에 아래 명령어를 실행하여 가벼운 성능의 한국어 지원 모델을 다운로드하고 즉시 실행합니다.
+                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                                <code id="run-cmd-code" style="flex-grow: 1; background: #FAFBF9; border: 1px solid rgba(180, 198, 183, 0.4); padding: 4px 8px; border-radius: 4px; font-family: monospace;">ollama run gemma2:2b</code>
+                                <button id="btn-copy-run-cmd" style="padding: 4px 8px; font-size: 9px; cursor: pointer; border: 1px solid var(--accent-sage); background: white; border-radius: 4px; font-weight: bold;">복사</button>
+                            </div>
+                            <span style="font-size: 10px; opacity: 0.8;">※ 사양이 높은 경우 <code style="background: white; padding: 1px 3px;">ollama run llama3</code> 또는 <code style="background: white; padding: 1px 3px;">ollama run phi3</code>도 추천합니다.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
-    <!-- Scripts -->
+    <!-- Script imports -->
     <script src="./js/brain.js"></script>
     <script src="./js/app.js"></script>
 </body>
