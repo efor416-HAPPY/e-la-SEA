@@ -1,4 +1,3 @@
-// src/core/ara_router.cpp
 #include <iostream>
 #include <string>
 #include <vector>
@@ -13,6 +12,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <iomanip>
+#include <cctype>
 
 // Cross-Platform Socket/Pipe Header Configuration
 #ifdef _WIN32
@@ -45,8 +45,8 @@ enum class CommandType {
 std::string CommandTypeToString(CommandType type) {
     switch (type) {
         case CommandType::OPEN_APP:  return "OPEN_APP";
-        case CommandType::SYNC_FEED: return "SYNC_FEED";
-        case CommandType::FILE_READ: return "FILE_READ";
+        case CommandType::SYNC_FEED:  return "SYNC_FEED";
+        case CommandType::FILE_READ:  return "FILE_READ";
         default:                     return "UNKNOWN";
     }
 }
@@ -81,7 +81,7 @@ public:
 };
 
 // ============================================================================
-// 2. Transport Layer Implementations (Thread-safe)
+// 2. Transport Layer Implementations
 // ============================================================================
 
 class TcpTransport : public ITransport {
@@ -97,7 +97,6 @@ public:
 
     bool connect() override {
         std::lock_guard<std::mutex> lock(mutex_);
-        // Network connection simulation (prevents blocking during Keil/IDE checks)
         std::cout << "[TcpTransport] Connecting to " << host_ << ":" << port_ << "..." << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         is_connected_ = true;
@@ -114,7 +113,6 @@ public:
     std::string receive() override {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!is_connected_) return "";
-        // Simulated server return packet
         return "response:{\"status\":\"success\",\"reply\":\"TCP OK\"}";
     }
 
@@ -167,7 +165,6 @@ public:
     }
 };
 
-// Thread-safe in-memory message queue transport for low-latency Local Socket simulations
 class LocalSocketTransport : public ITransport {
 private:
     std::queue<std::string> mailbox_;
@@ -196,16 +193,15 @@ public:
     std::string receive() override {
         std::unique_lock<std::mutex> lock(mutex_);
         if (!is_connected_) return "";
-        
-        // Wait for incoming message if empty
+
         if (mailbox_.empty()) {
             cv_.wait_for(lock, std::chrono::milliseconds(300));
         }
-        
+
         if (mailbox_.empty()) {
             return "response:{\"status\":\"success\",\"reply\":\"Local Mailbox Idle\"}";
         }
-        
+
         std::string msg = mailbox_.front();
         mailbox_.pop();
         return msg;
@@ -220,7 +216,7 @@ public:
 };
 
 // ============================================================================
-// 3. Security Layer (Audit & Permissions)
+// 3. Security Layer
 // ============================================================================
 
 class AuditLogger {
@@ -238,29 +234,20 @@ private:
 public:
     void log(const std::string& user, const std::string& action, const std::string& result) {
         std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "[AUDIT LOG | " << GetCurrentTimestamp() << "] Operator=" << user 
+        std::cout << "[AUDIT LOG | " << GetCurrentTimestamp() << "] Operator=" << user
                   << " | Action=" << action << " | Result=" << result << std::endl;
     }
 };
 
 class PermissionManager {
-private:
-    std::mutex mutex_;
-
 public:
     bool authorize(Role role, const Command& cmd) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        
-        // Role-based privilege matrix
         switch (cmd.type) {
             case CommandType::OPEN_APP:
-                // Only ADMIN and SYSTEM can execute external system binaries
                 return (role == Role::ADMIN || role == Role::SYSTEM);
             case CommandType::SYNC_FEED:
-                // Whitelisted for all roles
                 return true;
             case CommandType::FILE_READ:
-                // USER and ADMIN can read files, SYSTEM can read files
                 return true;
             default:
                 return false;
@@ -269,26 +256,29 @@ public:
 };
 
 // ============================================================================
-// 4. Command Parser, Validator, and Router
+// 4. Command Parser, Validator, Router
 // ============================================================================
 
 class CommandParser {
 public:
     Command parse(const std::string& rawInput) {
         Command cmd{CommandType::UNKNOWN, ""};
-        
+
         size_t colon_pos = rawInput.find(':');
         if (colon_pos == std::string::npos) {
             cmd.payload = rawInput;
             return cmd;
         }
-        
+
         std::string cmd_str = rawInput.substr(0, colon_pos);
         std::string payload = rawInput.substr(colon_pos + 1);
-        
-        // Clean spaces
-        cmd_str.erase(std::remove_if(cmd_str.begin(), cmd_str.end(), ::isspace), cmd_str.end());
-        
+
+        cmd_str.erase(
+            std::remove_if(cmd_str.begin(), cmd_str.end(),
+                [](unsigned char ch) { return std::isspace(ch); }),
+            cmd_str.end()
+        );
+
         if (cmd_str == "open") {
             cmd.type = CommandType::OPEN_APP;
         } else if (cmd_str == "sync") {
@@ -296,7 +286,7 @@ public:
         } else if (cmd_str == "read") {
             cmd.type = CommandType::FILE_READ;
         }
-        
+
         cmd.payload = payload;
         return cmd;
     }
@@ -309,22 +299,34 @@ public:
             out_error = "Invalid/Unknown command instruction header.";
             return false;
         }
-        if (cmd.payload.empty()) {
+
+        std::string payload = cmd.payload;
+        payload.erase(
+            std::remove_if(payload.begin(), payload.end(),
+                [](unsigned char ch) { return std::isspace(ch); }),
+            payload.end()
+        );
+
+        if (payload.empty()) {
             out_error = "Command payload parameter cannot be empty.";
             return false;
         }
-        // Check for command injection vectors
-        if (cmd.payload.find("rm -rf") != std::string::npos || 
-            cmd.payload.find("drop table") != std::string::npos || 
-            cmd.payload.find("format") != std::string::npos) {
+
+        std::string lower = cmd.payload;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+
+        if (lower.find("rm -rf") != std::string::npos ||
+            lower.find("drop table") != std::string::npos ||
+            lower.find("format") != std::string::npos) {
             out_error = "Security validation exception: Dangerous keyword pattern detected.";
             return false;
         }
+
         return true;
     }
 };
 
-// Forward declaration of services
 class ProcessService {
 public:
     bool launch(const std::string& app) {
@@ -372,19 +374,19 @@ public:
                     return "Successfully launched application " + cmd.payload;
                 }
                 return "Failed to launch application " + cmd.payload;
-                
+
             case CommandType::SYNC_FEED: {
                 std::string feed_res = feed_service_.sync();
                 memory_service_.store(feed_res);
                 return "Synchronized successfully. " + feed_res;
             }
-            
+
             case CommandType::FILE_READ: {
                 std::string content = file_service_.read(cmd.payload);
                 memory_service_.store("Read file: " + cmd.payload);
                 return content;
             }
-            
+
             default:
                 return "Unknown routing pathway.";
         }
@@ -392,7 +394,7 @@ public:
 };
 
 // ============================================================================
-// 5. Recovery Layer (Retry & Health Monitor)
+// 5. Recovery Layer
 // ============================================================================
 
 class RetryManager {
@@ -406,31 +408,26 @@ public:
                     return true;
                 }
             } catch (const std::exception& e) {
-                std::cerr << "[RetryManager] Warning: Exception caught on attempt " 
+                std::cerr << "[RetryManager] Warning: Exception caught on attempt "
                           << (attempt + 1) << ": " << e.what() << std::endl;
             }
             attempt++;
-            std::this_thread::sleep_for(std::chrono::milliseconds(50 * attempt)); // exponential backoff
+            std::this_thread::sleep_for(std::chrono::milliseconds(50 * attempt));
         }
         return false;
     }
 };
 
 class HealthMonitor {
-private:
-    std::mutex mutex_;
-
 public:
     bool isAlive() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        // Performs status inspections on thread pools and resources
         std::cout << "[HealthMonitor] Checking threads, sockets, and memory pools -> STABLE" << std::endl;
         return true;
     }
 };
 
 // ============================================================================
-// 6. Core Controller Orchestration (Thread-Safe Onion Pipeline)
+// 6. Core Controller
 // ============================================================================
 
 class CoreController {
@@ -447,19 +444,26 @@ private:
 
 public:
     CoreController(std::unique_ptr<ITransport> transport)
-        : transport_(std::move(transport)) {}
+        : transport_(std::move(transport)) {
+        retry_.execute([this]() {
+            return transport_ && transport_->connect();
+        }, 3);
+    }
 
     void swapTransport(std::unique_ptr<ITransport> new_transport) {
         std::lock_guard<std::mutex> lock(core_mutex_);
         std::cout << "[CoreController] Swapping active Transport Layer..." << std::endl;
-        transport_->disconnect();
+
+        if (transport_) {
+            transport_->disconnect();
+        }
+
         transport_ = std::move(new_transport);
-        
-        // Wrap connection with RetryManager
+
         bool connected = retry_.execute([this]() {
-            return transport_->connect();
+            return transport_ && transport_->connect();
         }, 3);
-        
+
         if (!connected) {
             std::cerr << "[CoreController] Failed to re-establish new transport connection after retries." << std::endl;
         }
@@ -467,27 +471,27 @@ public:
 
     void process(Role operator_role, const std::string& rawCommand) {
         std::lock_guard<std::mutex> lock(core_mutex_);
-        
         std::string role_str = RoleToString(operator_role);
-        std::cout << "\n==============================================" << std::endl;
-        std::cout << "  ARA Pipeline Execution Start: " << rawCommand << std::endl;
-        std::cout << "==============================================" << std::endl;
 
-        // 1. Health validation check
+        std::cout << "\n==============================================\n";
+        std::cout << "  ARA Pipeline Execution Start: " << rawCommand << "\n";
+        std::cout << "==============================================\n";
+
         if (!health_.isAlive()) {
             logger_.log(role_str, rawCommand, "ERROR: Core degraded state");
             return;
         }
 
-        // 2. Transport transmission (Simulate sending data to central hub)
-        transport_->send(rawCommand);
-        std::string received_raw = transport_->receive();
-        std::cout << "[CoreController] Received payload from active transport." << std::endl;
+        if (!transport_ || !transport_->send(rawCommand)) {
+            logger_.log(role_str, rawCommand, "ERROR: Transport send failed");
+            return;
+        }
 
-        // 3. Parse payload into structural Command
+        std::string received_raw = transport_->receive();
+        std::cout << "[CoreController] Received payload from active transport: " << received_raw << std::endl;
+
         Command cmd = parser_.parse(rawCommand);
-        
-        // 4. Validate Command syntax/payload safety
+
         std::string err_msg;
         if (!validator_.validate(cmd, err_msg)) {
             std::cerr << "[CoreController] Validation failed: " << err_msg << std::endl;
@@ -495,54 +499,38 @@ public:
             return;
         }
 
-        // 5. Authorize based on operator Role
         if (!permission_.authorize(operator_role, cmd)) {
             std::cerr << "[CoreController] Permission Denied for operator role: " << role_str << std::endl;
             logger_.log(role_str, rawCommand, "DENIED: Insufficient permissions");
             return;
         }
 
-        // 6. Route command to target services and retrieve results
         std::string execution_result = router_.route(cmd);
         std::cout << "[CoreController] Service Execution Result: " << execution_result << std::endl;
 
-        // 7. Standard Audit Logging
-        logger_.log(role_str, CommandTypeToString(cmd.type) + " " + cmd.payload, "SUCCESS: " + execution_result);
+        logger_.log(role_str, CommandTypeToString(cmd.type) + " " + cmd.payload,
+                    "SUCCESS: " + execution_result);
     }
 };
 
 // ============================================================================
-// 7. Main Execution Simulation (Test Driver)
+// 7. Main
 // ============================================================================
 
 int main() {
     std::cout << "=== ARA CORE C++ ARCHITECTURE SIMULATION START ===" << std::endl;
 
-    // Start with Local Socket Transport
     auto controller = std::make_unique<CoreController>(std::make_unique<LocalSocketTransport>());
-    
-    // 1. Run simulation commands with USER role
-    // Whitelisted Feed sync query (Expected: SUCCESS)
+
     controller->process(Role::USER, "sync:feed");
-
-    // Launch Calculator binary with USER role (Expected: DENIED - insufficient privileges)
     controller->process(Role::USER, "open:calculator");
-
-    // 2. Run simulation commands with ADMIN role
-    // Launch Notepad binary with ADMIN role (Expected: SUCCESS)
     controller->process(Role::ADMIN, "open:notepad");
-
-    // Malicious shell injection payload (Expected: REJECTED - validation failure)
     controller->process(Role::ADMIN, "open:calc && rm -rf /");
 
-    // 3. Test Dynamic Transport Swapping (LocalSocket -> TcpTransport -> PipeTransport)
     std::cout << "\n[Simulation] Simulating on-the-fly transport switching..." << std::endl;
     controller->swapTransport(std::make_unique<TcpTransport>("127.0.0.1", 9091));
-    
-    // Execute after swapping (Expected: SUCCESS)
     controller->process(Role::ADMIN, "read:greenhouse_spec.md");
 
-    // Switch to Named Pipe / Unix Socket
     controller->swapTransport(std::make_unique<PipeTransport>("ara_ipc_pipe"));
     controller->process(Role::SYSTEM, "sync:feed");
 
